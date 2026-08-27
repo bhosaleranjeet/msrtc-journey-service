@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: msrtc-citizen-journey-prototype
+    runtime: docker
+    healthCheckPath: /api/health
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4.1-mini
+      - key: APP_ENV
+        value: production
