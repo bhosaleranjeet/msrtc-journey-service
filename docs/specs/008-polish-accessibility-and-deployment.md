@@ -31,4 +31,7 @@ Make the complete prototype reliable, accessible, visually coherent and ready fo
 ## Implementation notes
 
 - Completed locally: mobile and keyboard polish, semantic error announcements, visible focus styles, global mock disclosure, same-origin production API configuration, safe structured domain-event logging, deterministic demo scripts, and a Render-ready Docker deployment configuration.
-- Remaining external release step: connect the repository to a hosting account, configure `OPENAI_API_KEY` there (if natural-language parsing is wanted), and verify the generated HTTPS URL. This cannot be completed from the local repository without hosting-account authority.
+- Added a frontend-only, session-scoped demo access gate with one configurable credential pair, visible judge credentials, sign-out, keyboard-friendly fields, and an explicit warning that it is not real authentication.
+- Added a persistent “My booking” path that remembers the latest confirmed booking ID and restores authoritative booking, ticket, and cancellation details from the backend after refresh or sign-in.
+- Public release verified on 2026-08-28: the frontend is deployed on Vercel, the stateful Docker backend is deployed on Render, production CORS is restricted to the frontend origin, and both structured and OpenAI-assisted searches were exercised successfully over HTTPS.
+- Submission update: specification 009 replaces process-local state with SQLite/PostgreSQL repositories. The next Render deployment must set a secret Neon `DATABASE_URL`; startup migrations and the idempotent rolling seed run automatically.

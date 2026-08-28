@@ -1,4 +1,10 @@
 from app.domain.tickets.models import Ticket
+from typing import Protocol
+
+
+class TicketRepository(Protocol):
+    def get_by_booking(self, booking_id: str) -> Ticket | None: ...
+    def save(self, ticket: Ticket) -> Ticket: ...
 
 
 class InMemoryTicketRepository:

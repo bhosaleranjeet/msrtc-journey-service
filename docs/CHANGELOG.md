@@ -6,6 +6,15 @@ All notable implementation and documentation changes are recorded here.
 
 ### Added
 
+- Replaced the process-local transport and booking runtime with SQLAlchemy persistence, using local SQLite by default and a Neon-compatible PostgreSQL URL in production.
+- Added an idempotent 15-hub Maharashtra seed with 18 bidirectional corridors, multiple service classes and departures, a rolling 14-day timetable, and non-destructive trip creation.
+- Added separate confirmed-seat and temporary-hold records, transactional hold acquisition, persisted passengers/tickets/refunds, and restart-safe booking management.
+- Added Alembic migrations, Neon/Render database configuration, `seeded_synthetic` health metadata, network coverage/count metadata, and a specific supported-date API error.
+- Added manual stop suggestions, a supported-network disclosure, four representative direct-route shortcuts, date constraints, and a warning not to enter real passenger information.
+
+- Added a frontend-only prototype login gate with one configurable demo credential pair, session-scoped access, explicit security disclosure, and sign-out control.
+- Added persistent access to the latest confirmed booking: the frontend remembers its booking reference locally and a global “My booking” action restores the backend record, journey pass details, and cancellation screen after refresh or sign-in.
+- Fixed failed AI searches leaving stale “Finding buses” feedback after returning to the planner, and replaced the bouncing sparkle with a static AI marker while retaining restrained progress feedback.
 - Prepared the public submission build with a rolling next-day synthetic schedule, server-owned AI reference date, Vercel frontend configuration, split Vercel/Render deployment guidance, social metadata, favicon, optimized hero delivery, and current one-submit demo instructions.
 
 - Product brief, decision log, changelog, and incremental implementation specifications.

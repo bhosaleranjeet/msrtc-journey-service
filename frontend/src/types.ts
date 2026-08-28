@@ -8,7 +8,14 @@ export type Journey = {
 
 export type JourneySegment = Omit<Journey, 'id'> & { trip_id: string }
 export type ConnectingJourney = { id: string; segments: JourneySegment[]; transfer_stop: StopCandidate; transfer_minutes: number; total_duration_minutes: number; total_fare_inr: number; available_seats: number }
-export type ApiError = { code: string; message: string; details: { field?: 'origin' | 'destination'; candidates?: StopCandidate[] } }
+export type ApiError = { code: string; message: string; details: { field?: 'origin' | 'destination'; candidates?: StopCandidate[]; start_date?: string; end_date?: string } }
+export type DemoNetwork = {
+  data_mode: 'seeded_synthetic'
+  coverage_start: string
+  coverage_end: string
+  coverage: { start_date: string; end_date: string; hub_count: number; corridor_count: number; demo_connection_count: number; stop_count: number; route_count: number; service_count: number; trip_count: number }
+  stops: Array<StopCandidate & { aliases: string[]; code: string }>
+}
 export type ParsedIntent = { origin: string; destination: string; travel_date: string; time_window: { start: string; end: string } | null; preferences: { air_conditioned: boolean | null } }
 export type BookingSeat = { id: string; number: string; status: 'AVAILABLE' | 'HELD' | 'BOOKED'; seat_type: 'WINDOW' | 'AISLE'; held_by_current_booking: boolean }
 export type Passenger = { name: string; age: number; concession_type: 'NONE' | 'STUDENT' | 'SENIOR' }

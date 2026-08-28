@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from app.domain.transport.models import Route, SeatStatus, Service, Stop, TripInstance
 from app.repositories.transport import TransportRepository
-from app.repositories.bookings import InMemoryBookingRepository
+from app.repositories.bookings import BookingRepository
 from app.schemas.journeys import (
     ConnectingJourneyResult,
     JourneyResult,
@@ -34,7 +34,7 @@ def _candidate(stop: Stop) -> StopCandidate:
 
 
 class JourneyService:
-    def __init__(self, repository: TransportRepository, bookings: InMemoryBookingRepository | None = None) -> None:
+    def __init__(self, repository: TransportRepository, bookings: BookingRepository | None = None) -> None:
         self._repository = repository
         self._bookings = bookings
 
@@ -195,8 +195,15 @@ class JourneyService:
             key = lambda item: (item.segments[0].departure_at, item.total_duration_minutes, item.total_fare_inr, item.id)
         return sorted(results, key=key)
 
-    @staticmethod
-    def _validate_request(request: JourneySearchRequest) -> None:
+    def _validate_request(self, request: JourneySearchRequest) -> None:
+        start_date, end_date = self._repository.supported_date_range()
+        if not start_date <= request.journey_date <= end_date:
+            raise JourneyDomainError(
+                "DATE_OUTSIDE_DEMO_WINDOW",
+                f"Choose a date from {start_date.isoformat()} to {end_date.isoformat()} for this prototype network.",
+                {"start_date": start_date.isoformat(), "end_date": end_date.isoformat()},
+                422,
+            )
         if request.time_start and request.time_end and request.time_start > request.time_end:
             raise JourneyDomainError("INVALID_JOURNEY_QUERY", "The end of the time window must be after its start.", {}, 422)
 

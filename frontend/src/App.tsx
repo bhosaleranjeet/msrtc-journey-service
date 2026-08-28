@@ -3,9 +3,13 @@ import type { FormEvent } from 'react'
 import { Icon } from './components/Icon'
 import maharashtraHero from './assets/maharashtra-journey-hero.jpg'
 import msrtcLogo from './assets/msrtc-emblem.png'
-import type { ApiError, Booking, CancellationPreview, ConnectingJourney, Journey, JourneyPass, ParsedIntent, Passenger, StopCandidate } from './types'
+import type { ApiError, Booking, CancellationPreview, ConnectingJourney, DemoNetwork, Journey, JourneyPass, ParsedIntent, Passenger, StopCandidate } from './types'
 
 const API_URL = import.meta.env.VITE_API_URL ?? '/api'
+const DEMO_USERNAME = import.meta.env.VITE_DEMO_USERNAME ?? 'demo'
+const DEMO_PASSWORD = import.meta.env.VITE_DEMO_PASSWORD ?? 'lalpari2026'
+const DEMO_AUTH_KEY = 'msrtc-demo-authenticated'
+const LAST_BOOKING_KEY = 'msrtc-demo-last-booking'
 const dateInIndia = (daysFromToday = 0) => {
   const date = new Date(Date.now() + daysFromToday * 86_400_000)
   const parts = new Intl.DateTimeFormat('en-GB', {
@@ -26,19 +30,101 @@ const formatDate = (value: string) => new Intl.DateTimeFormat('en-IN', { weekday
 const duration = (minutes: number) => `${Math.floor(minutes / 60)}h ${minutes % 60}m`
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(() => sessionStorage.getItem(DEMO_AUTH_KEY) === 'true')
+
+  if (!isAuthenticated) {
+    return <LoginScreen onAuthenticated={() => {
+      sessionStorage.setItem(DEMO_AUTH_KEY, 'true')
+      setIsAuthenticated(true)
+    }} />
+  }
+
+  return <JourneyApp onSignOut={() => {
+    sessionStorage.removeItem(DEMO_AUTH_KEY)
+    setIsAuthenticated(false)
+  }} />
+}
+
+function LoginScreen({ onAuthenticated }: { onAuthenticated: () => void }) {
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [loginError, setLoginError] = useState('')
+
+  function signIn(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (username === DEMO_USERNAME && password === DEMO_PASSWORD) {
+      setLoginError('')
+      onAuthenticated()
+      return
+    }
+    setLoginError('That username or password does not match the demo account.')
+  }
+
+  return <main className="relative grid min-h-screen place-items-center overflow-x-hidden bg-[#f5f1e9] px-4 py-8 text-[#17201b]">
+    <div className="absolute inset-0 bg-cover [background-position:64%_center]" style={{ backgroundImage: `url(${maharashtraHero})` }} aria-hidden="true" />
+    <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(245,241,233,0.96)_0%,rgba(245,241,233,0.84)_45%,rgba(245,241,233,0.48)_100%)]" aria-hidden="true" />
+
+    <section className="relative w-full max-w-md overflow-hidden rounded-2xl border border-white/80 bg-white/82 shadow-[0_24px_72px_rgba(23,31,25,0.18)] backdrop-blur-xl" aria-labelledby="login-title">
+      <div className="h-1 bg-[#b63231]" aria-hidden="true" />
+      <div className="p-6 sm:p-8">
+        <header className="flex items-start justify-between gap-5">
+          <img src={msrtcLogo} alt="MSRTC" className="h-14 w-16 object-contain" />
+          <span className="rounded-full border border-[#c99a43] bg-[#fff9e9]/90 px-3 py-1.5 text-xs font-semibold text-[#755419]">Prototype</span>
+        </header>
+
+        <p className="mt-7 mb-2 text-[10px] font-bold tracking-[0.2em] text-[#a92f2f] uppercase">Demo access</p>
+        <h1 id="login-title" className="m-0 text-4xl leading-tight font-semibold tracking-[-0.04em] text-[#101713]">Welcome aboard.</h1>
+        <p className="mt-3 mb-0 text-sm leading-6 text-[#68716a]">Sign in with the prototype account to explore journey planning and booking.</p>
+
+        <form className="mt-7 grid gap-5" onSubmit={signIn}>
+          <label className="grid gap-2 text-sm font-semibold text-[#465149]">Username
+            <input className="min-h-13 rounded-xl border border-[#cbc7bd] bg-white/90 px-4 text-base font-normal text-[#101713] outline-none transition focus:border-[#155b49] focus:ring-4 focus:ring-[#155b49]/10" value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" autoFocus required />
+          </label>
+          <label className="grid gap-2 text-sm font-semibold text-[#465149]">Password
+            <input className="min-h-13 rounded-xl border border-[#cbc7bd] bg-white/90 px-4 text-base font-normal text-[#101713] outline-none transition focus:border-[#155b49] focus:ring-4 focus:ring-[#155b49]/10" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required />
+          </label>
+
+          {loginError && <p className="m-0 rounded-xl border border-[#b63231]/20 bg-[#fff1ee] px-4 py-3 text-sm text-[#703634]" role="alert">{loginError}</p>}
+
+          <button className="flex min-h-13 items-center justify-center gap-2 rounded-xl bg-[#b63231] px-5 font-semibold text-white shadow-sm transition hover:bg-[#922626] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[#e4bd73]">Enter prototype <Icon name="arrow" /></button>
+        </form>
+
+        <aside className="mt-6 rounded-xl border border-[#ded8cc] bg-[#faf8f3]/90 p-4 text-sm text-[#59645e]" aria-label="Demo credentials">
+          <strong className="block text-[#263029]">Demo credentials</strong>
+          <div className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1"><span>Username</span><code className="font-semibold text-[#0f4b3c]">{DEMO_USERNAME}</code><span>Password</span><code className="font-semibold text-[#0f4b3c]">{DEMO_PASSWORD}</code></div>
+        </aside>
+
+        <p className="mt-5 mb-0 text-xs leading-5 text-[#737b75]">Frontend-only access for demonstration purposes. This is not secure authentication and does not protect backend data.</p>
+      </div>
+    </section>
+  </main>
+}
+
+function JourneyApp({ onSignOut }: { onSignOut: () => void }) {
   const [stage, setStage] = useState<Stage>('plan')
   const [origin, setOrigin] = useState('Pune'), [destination, setDestination] = useState('Nashik'), [journeyDate, setJourneyDate] = useState(DEMO_DATE)
   const [natural, setNatural] = useState(''), [showNatural, setShowNatural] = useState(true), [intentMessage, setIntentMessage] = useState(''), [isParsing, setIsParsing] = useState(false)
   const [sortBy, setSortBy] = useState('recommended'), [acOnly, setAcOnly] = useState(false), [results, setResults] = useState<Journey[]>([]), [connections, setConnections] = useState<ConnectingJourney[]>([]), [error, setError] = useState<ApiError | null>(null), [loading, setLoading] = useState(false)
   const [resumeAiSearch, setResumeAiSearch] = useState(false)
   const [booking, setBooking] = useState<Booking | null>(null), [journey, setJourney] = useState<Journey | null>(null), [passengerName, setPassengerName] = useState(''), [passengerAge, setPassengerAge] = useState(''), [concession, setConcession] = useState<Passenger['concession_type']>('NONE'), [recoveryDemo, setRecoveryDemo] = useState(false), [working, setWorking] = useState(false), [journeyPass, setJourneyPass] = useState<JourneyPass | null>(null), [cancellation, setCancellation] = useState<CancellationPreview | null>(null), [manageId, setManageId] = useState('')
+  const [network, setNetwork] = useState<DemoNetwork | null>(null), [showNetwork, setShowNetwork] = useState(false)
 
   useEffect(() => { window.scrollTo(0, 0) }, [stage])
+  useEffect(() => {
+    if (booking?.status === 'CONFIRMED') localStorage.setItem(LAST_BOOKING_KEY, booking.id)
+  }, [booking])
+  useEffect(() => {
+    let active = true
+    void fetch(`${API_URL}/demo-network?summary=true`).then(async (response) => {
+      if (response.ok && active) setNetwork((await response.json()) as DemoNetwork)
+    }).catch(() => undefined)
+    return () => { active = false }
+  }, [])
 
   async function findBuses(event?: FormEvent<HTMLFormElement>, nextSort = sortBy, criteria?: SearchCriteria, fromAi = false) {
     event?.preventDefault(); setLoading(true); setError(null)
     const search = criteria ?? { origin, destination, journeyDate, acOnly }
-    try { const response = await fetch(`${API_URL}/journeys/search`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ origin: search.origin, destination: search.destination, journey_date: search.journeyDate, air_conditioned: search.acOnly || undefined, sort_by: nextSort }) }); if (!response.ok) { const apiError = ((await response.json()) as { error: ApiError }).error; setResumeAiSearch(fromAi && apiError.code === 'AMBIGUOUS_STOP'); setError(apiError); return }; const data = (await response.json()) as { results: Journey[]; connecting_results: ConnectingJourney[] }; setResults(data.results); setConnections(data.connecting_results); setIntentMessage(''); setResumeAiSearch(false); setStage('choose') } catch { setResumeAiSearch(false); setError({ code: 'SERVICE_UNAVAILABLE', message: 'We could not load buses right now. Your journey details are still here—please try again.', details: {} }) } finally { setLoading(false) }
+    try { const response = await fetch(`${API_URL}/journeys/search`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ origin: search.origin, destination: search.destination, journey_date: search.journeyDate, air_conditioned: search.acOnly || undefined, sort_by: nextSort }) }); if (!response.ok) { const apiError = ((await response.json()) as { error: ApiError }).error; const canResume = fromAi && apiError.code === 'AMBIGUOUS_STOP'; setResumeAiSearch(canResume); if (!canResume) setIntentMessage(''); setError(apiError); return }; const data = (await response.json()) as { results: Journey[]; connecting_results: ConnectingJourney[] }; setResults(data.results); setConnections(data.connecting_results); setIntentMessage(''); setResumeAiSearch(false); setStage('choose') } catch { setIntentMessage(''); setResumeAiSearch(false); setError({ code: 'SERVICE_UNAVAILABLE', message: 'We could not load buses right now. Your journey details are still here—please try again.', details: {} }) } finally { setLoading(false) }
   }
   async function parseIntent() { setIsParsing(true); setIntentMessage(''); try { const response = await fetch(`${API_URL}/intent/parse`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: natural }) }); if (!response.ok) { setIntentMessage(((await response.json()) as { error: ApiError }).error.message); return }; const intent = (await response.json()) as ParsedIntent; const criteria = { origin: intent.origin, destination: intent.destination, journeyDate: intent.travel_date, acOnly: intent.preferences.air_conditioned === true }; setOrigin(criteria.origin); setDestination(criteria.destination); setJourneyDate(criteria.journeyDate); setAcOnly(criteria.acOnly); setResumeAiSearch(true); setIntentMessage('Journey understood. Finding buses…'); await findBuses(undefined, sortBy, criteria, true) } catch { setResumeAiSearch(false); setIntentMessage('Natural-language search is unavailable. Use the journey fields instead.') } finally { setIsParsing(false) } }
   function selectStop(candidate: StopCandidate) {
@@ -55,12 +141,37 @@ export default function App() {
   async function confirm() { const response = await bookingRequest('/confirm', { method: 'POST' }); if (response) setBooking((await response.json()) as Booking) }
   async function showPass() { const response = await bookingRequest('/ticket'); if (response) { setJourneyPass((await response.json()) as JourneyPass); setStage('pass') } }
   async function openManage(current = booking?.id) { if (!current) { setStage('manage'); return } setWorking(true); setError(null); try { const response = await fetch(`${API_URL}/bookings/${current}/cancellation-preview`); if (!response.ok) { setError(((await response.json()) as { error: ApiError }).error); return }; setCancellation((await response.json()) as CancellationPreview); setStage('manage') } catch { setError({ code: 'SERVICE_UNAVAILABLE', message: 'We could not open booking management. Please try again.', details: {} }) } finally { setWorking(false) } }
-  async function findBooking(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (!manageId.trim()) return; setWorking(true); setError(null); try { const response = await fetch(`${API_URL}/bookings/${manageId.trim()}`); if (!response.ok) { setError(((await response.json()) as { error: ApiError }).error); return }; setBooking((await response.json()) as Booking); setJourney(null); await openManage(manageId.trim()) } catch { setError({ code: 'SERVICE_UNAVAILABLE', message: 'We could not find that booking. Please try again.', details: {} }) } finally { setWorking(false) } }
+  async function loadBooking(current: string) {
+    setWorking(true); setError(null)
+    try {
+      const response = await fetch(`${API_URL}/bookings/${current}`)
+      if (!response.ok) {
+        const apiError = ((await response.json()) as { error: ApiError }).error
+        if (apiError.code === 'BOOKING_NOT_FOUND') { localStorage.removeItem(LAST_BOOKING_KEY); setBooking(null); setJourney(null); setJourneyPass(null); setCancellation(null); setStage('manage') }
+        setError(apiError); return
+      }
+      const loadedBooking = (await response.json()) as Booking
+      let loadedPass: JourneyPass | null = null
+      if (loadedBooking.status === 'CONFIRMED') {
+        const ticketResponse = await fetch(`${API_URL}/bookings/${current}/ticket`)
+        if (ticketResponse.ok) loadedPass = (await ticketResponse.json()) as JourneyPass
+      }
+      const cancellationResponse = await fetch(`${API_URL}/bookings/${current}/cancellation-preview`)
+      if (!cancellationResponse.ok) { setError(((await cancellationResponse.json()) as { error: ApiError }).error); return }
+      setBooking(loadedBooking); setJourney(null); setJourneyPass(loadedPass); setCancellation((await cancellationResponse.json()) as CancellationPreview); setManageId(current); setStage('manage')
+    } catch { setError({ code: 'SERVICE_UNAVAILABLE', message: 'We could not find that booking. Please try again.', details: {} }) } finally { setWorking(false) }
+  }
+  async function findBooking(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (manageId.trim()) await loadBooking(manageId.trim()) }
+  async function openMyBooking() {
+    const current = booking && (booking.status === 'CONFIRMED' || booking.status === 'CANCELLED') ? booking.id : localStorage.getItem(LAST_BOOKING_KEY)
+    if (current) await loadBooking(current)
+    else { setBooking(null); setJourney(null); setJourneyPass(null); setCancellation(null); setStage('manage') }
+  }
   async function cancel() { const response = await bookingRequest('/cancel', { method: 'POST' }); if (response) setBooking((await response.json()) as Booking) }
   async function advanceRefund() { const response = await bookingRequest('/refund/advance', { method: 'POST' }); if (response) setBooking((await response.json()) as Booking) }
   const bookStep = !booking || booking.status === 'DRAFT' ? 'seat' : booking.status === 'SEATS_HELD' && !booking.passenger ? 'passenger' : booking.status === 'SEATS_HELD' ? 'payment' : booking.status === 'PAYMENT_RECEIVED' ? 'confirm' : booking.status === 'CONFIRMED' ? 'confirmed' : 'failed'
 
-  return <div className="min-h-screen bg-[#f5f1e9] font-sans text-[#17201b]"><header className="h-[72px] border-b border-[#ded8cc] bg-white"><div className="mx-auto flex h-full w-full max-w-6xl items-center px-4 sm:px-6"><button className="flex h-[42px] w-12 items-center justify-center border-0 bg-transparent p-0" aria-label="Go to journey planner" onClick={() => setStage('plan')}><img src={msrtcLogo} alt="" className="h-[42px] w-auto max-w-full object-contain" /></button><div className="ml-5 hidden border-l border-[#ded8cc] pl-5 text-sm text-[#68716a] sm:block">{stage === 'plan' ? 'Plan a journey' : stage === 'choose' ? 'Choose a service' : stage === 'book' ? 'Complete booking' : stage === 'pass' ? 'Your journey pass' : 'Manage journey'}</div><span className="ml-auto rounded-full border border-[#c99a43] px-3 py-1.5 text-xs font-semibold text-[#755419]">Prototype</span></div></header><main>{stage === 'plan' && PlanScreen()}{stage === 'choose' && ChooseScreen()}{stage === 'book' && BookScreen()}{stage === 'pass' && PassScreen()}{stage === 'manage' && ManageScreen()}</main></div>
+  return <div className="min-h-screen bg-[#f5f1e9] font-sans text-[#17201b]"><header className="h-[72px] border-b border-[#ded8cc] bg-white"><div className="mx-auto flex h-full w-full max-w-6xl items-center px-4 sm:px-6"><button className="flex h-[42px] w-12 items-center justify-center border-0 bg-transparent p-0" aria-label="Go to journey planner" onClick={() => setStage('plan')}><img src={msrtcLogo} alt="" className="h-[42px] w-auto max-w-full object-contain" /></button><div className="ml-5 hidden border-l border-[#ded8cc] pl-5 text-sm text-[#68716a] sm:block">{stage === 'plan' ? 'Plan a journey' : stage === 'choose' ? 'Choose a service' : stage === 'book' ? 'Complete booking' : stage === 'pass' ? 'Your journey pass' : 'Manage journey'}</div><div className="ml-auto flex items-center gap-1 sm:gap-2"><span className="hidden rounded-full border border-[#c99a43] px-3 py-1.5 text-xs font-semibold text-[#755419] sm:inline-flex">Prototype</span><button className="rounded-full px-2.5 py-1.5 text-xs font-semibold text-[#0f4b3c] transition hover:bg-[#eaf3ee] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[#e4bd73] sm:px-3" onClick={() => void openMyBooking()} disabled={working}>My booking</button><button className="rounded-full px-2.5 py-1.5 text-xs font-semibold text-[#59645e] transition hover:bg-[#f5f1e9] hover:text-[#a92f2f] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[#e4bd73] sm:px-3" onClick={onSignOut}>Sign out</button></div></div></header><main>{stage === 'plan' && PlanScreen()}{stage === 'choose' && ChooseScreen()}{stage === 'book' && BookScreen()}{stage === 'pass' && PassScreen()}{stage === 'manage' && ManageScreen()}</main></div>
 
   function PlanScreen() {
     const aiWorking = isParsing || (loading && resumeAiSearch)
@@ -80,7 +191,7 @@ export default function App() {
             <p className="text-[10px] font-semibold tracking-[0.2em] uppercase">Maharashtra State Road Transport Corporation</p>
             <span className="hidden h-px w-8 bg-[#b9a98e] sm:block" aria-hidden="true" />
           </div>
-          <h1 className="max-w-3xl font-['Kohinoor_Devanagari','Noto_Sans_Devanagari','Mangal',sans-serif] text-[42px] leading-[1.12] font-bold tracking-[-0.015em] text-[#a92f2f] drop-shadow-[0_1px_0_rgba(255,255,255,0.35)] sm:text-[52px] lg:text-[56px]" lang="mr"><span className="block">जनसामान्यांसाठी</span><span className="mt-1 block">रस्ता तिथे एसटी</span></h1>
+          <h1 className="max-w-3xl font-['Kohinoor_Devanagari','Noto_Sans_Devanagari','Mangal',sans-serif] text-[42px] leading-[1.12] font-bold tracking-[-0.015em] text-[#a92f2f] drop-shadow-[0_1px_0_rgba(255,255,255,0.35)] sm:text-[52px] lg:text-[56px]" lang="mr"><span className="block">जनसामान्यांसाठी</span><span className="mt-1 block">रस्ता तिथे एस.टी</span></h1>
           <span className="mt-4 block h-0.5 w-12 rounded-full bg-[#c99a43]" aria-hidden="true" />
           <p className="mt-3 max-w-xl text-base leading-7 font-medium text-[#4f5b54] sm:text-[17px]">Tell us where you want to go. We’ll find the right ST service.</p>
         </div>
@@ -91,7 +202,7 @@ export default function App() {
           {showNatural && <div className={`group relative grid grid-cols-[1fr_auto] items-center gap-3 overflow-hidden rounded-xl border bg-white/85 px-4 py-3 shadow-sm transition focus-within:ring-2 ${aiWorking ? 'border-[#c99a43] ring-[#c99a43]/12' : 'border-white/80 focus-within:border-[#155b49]/35 focus-within:ring-[#155b49]/8'}`} aria-busy={aiWorking}>
             {aiWorking && <span className="absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r from-[#b63231] via-[#c99a43] to-[#155b49] motion-safe:animate-pulse" aria-hidden="true" />}
             <div className="min-w-0">
-              <label className="mb-1 flex items-center gap-2 text-xs font-bold text-[#155b49]" htmlFor="journey-description"><span className={`grid size-5 place-items-center rounded-md bg-[#eaf4ef] ${aiWorking ? 'text-[#b17d22] motion-safe:animate-bounce' : 'text-[#155b49]'}`}><Icon name="sparkle" /></span>{aiWorking ? 'AI is planning your journey' : 'AI journey planner'}</label>
+              <label className="mb-1 flex items-center gap-2 text-xs font-bold text-[#155b49]" htmlFor="journey-description"><span className={`grid size-5 place-items-center rounded-md bg-[#eaf4ef] ${aiWorking ? 'text-[#b17d22]' : 'text-[#155b49]'}`}><Icon name="sparkle" /></span>{aiWorking ? 'AI is planning your journey' : 'AI journey planner'}</label>
               <input id="journey-description" className="w-full border-0 bg-transparent p-0 text-base font-medium text-[#101713] outline-none placeholder:font-normal placeholder:text-[#858c87] focus:outline-none" value={natural} onChange={(event) => setNatural(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !aiWorking && natural.trim()) { event.preventDefault(); void parseIntent() } }} placeholder="Describe your journey — e.g. Pune to Nashik tomorrow morning, AC" readOnly={aiWorking} />
             </div>
             <button type="button" className="grid size-11 place-items-center rounded-xl bg-[#155b49] text-white shadow-sm transition hover:bg-[#104838] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[#c99a43] disabled:cursor-not-allowed disabled:bg-[#b17d22] disabled:text-white" aria-label={aiWorking ? 'Planning journey' : 'Ask AI to plan this journey'} onClick={() => void parseIntent()} disabled={aiWorking || !natural.trim()}>{aiWorking ? <span className="size-5 rounded-full border-2 border-white/35 border-t-white motion-safe:animate-spin" aria-hidden="true" /> : <Icon name="arrow" />}</button>
@@ -100,25 +211,30 @@ export default function App() {
 
           <div className="flex items-center gap-3 px-2 py-2" aria-hidden="true"><span className="h-px flex-1 bg-black/10" /><span className="text-[10px] font-bold tracking-[0.14em] text-[#747c76] uppercase">Or search manually</span><span className="h-px flex-1 bg-black/10" /></div>
           <form className="grid overflow-hidden rounded-2xl border border-white/80 bg-white/72 shadow-sm md:grid-cols-[1fr_44px_1fr_1fr_auto]" onSubmit={(event) => void findBuses(event)}>
-            <label className="grid gap-1 border-b border-black/10 px-5 py-3 md:border-r md:border-b-0 [@media_(min-width:1024px)_and_(max-height:900px)]:py-2"><span className="text-[10px] font-bold tracking-[0.16em] text-[#6b746e] uppercase">From</span><input className="min-w-0 border-0 bg-transparent p-0 text-lg font-semibold tracking-[-0.01em] outline-none focus:outline-none [@media_(min-width:1024px)_and_(max-height:900px)]:text-base" value={origin} onChange={(event) => setOrigin(event.target.value)} required /></label>
+            <label className="grid gap-1 border-b border-black/10 px-5 py-3 md:border-r md:border-b-0 [@media_(min-width:1024px)_and_(max-height:900px)]:py-2"><span className="text-[10px] font-bold tracking-[0.16em] text-[#6b746e] uppercase">From</span><input className="min-w-0 border-0 bg-transparent p-0 text-lg font-semibold tracking-[-0.01em] outline-none focus:outline-none [@media_(min-width:1024px)_and_(max-height:900px)]:text-base" value={origin} onChange={(event) => setOrigin(event.target.value)} list="supported-stops" autoComplete="off" required /></label>
             <span className="hidden place-items-center text-[#b63231] md:grid"><span className="grid size-8 place-items-center rounded-full bg-[#fff0ec]"><Icon name="arrow" /></span></span>
-            <label className="grid gap-1 border-b border-black/10 px-5 py-3 md:border-r md:border-b-0 [@media_(min-width:1024px)_and_(max-height:900px)]:py-2"><span className="text-[10px] font-bold tracking-[0.16em] text-[#6b746e] uppercase">To</span><input className="min-w-0 border-0 bg-transparent p-0 text-lg font-semibold tracking-[-0.01em] outline-none focus:outline-none [@media_(min-width:1024px)_and_(max-height:900px)]:text-base" value={destination} onChange={(event) => setDestination(event.target.value)} required /></label>
-            <label className="grid gap-1 border-b border-black/10 px-5 py-3 md:border-r md:border-b-0 [@media_(min-width:1024px)_and_(max-height:900px)]:py-2"><span className="text-[10px] font-bold tracking-[0.16em] text-[#6b746e] uppercase">Travel date</span><input className="min-w-0 border-0 bg-transparent p-0 text-lg font-semibold tracking-[-0.01em] outline-none focus:outline-none [@media_(min-width:1024px)_and_(max-height:900px)]:text-base" type="date" value={journeyDate} onChange={(event) => setJourneyDate(event.target.value)} required /></label>
+            <label className="grid gap-1 border-b border-black/10 px-5 py-3 md:border-r md:border-b-0 [@media_(min-width:1024px)_and_(max-height:900px)]:py-2"><span className="text-[10px] font-bold tracking-[0.16em] text-[#6b746e] uppercase">To</span><input className="min-w-0 border-0 bg-transparent p-0 text-lg font-semibold tracking-[-0.01em] outline-none focus:outline-none [@media_(min-width:1024px)_and_(max-height:900px)]:text-base" value={destination} onChange={(event) => setDestination(event.target.value)} list="supported-stops" autoComplete="off" required /></label>
+            <label className="grid gap-1 border-b border-black/10 px-5 py-3 md:border-r md:border-b-0 [@media_(min-width:1024px)_and_(max-height:900px)]:py-2"><span className="text-[10px] font-bold tracking-[0.16em] text-[#6b746e] uppercase">Travel date</span><input className="min-w-0 border-0 bg-transparent p-0 text-lg font-semibold tracking-[-0.01em] outline-none focus:outline-none [@media_(min-width:1024px)_and_(max-height:900px)]:text-base" type="date" value={journeyDate} min={network?.coverage_start} max={network?.coverage_end} onChange={(event) => setJourneyDate(event.target.value)} required /></label>
             <button className="flex min-h-16 items-center justify-center gap-3 bg-[#b63231] px-7 font-semibold text-white transition hover:bg-[#902525] focus-visible:outline-3 focus-visible:outline-offset-[-4px] focus-visible:outline-[#f0c775] disabled:opacity-60 [@media_(min-width:1024px)_and_(max-height:900px)]:min-h-14" disabled={loading}>{loading ? 'Finding buses…' : <>Find buses <Icon name="arrow" /></>}</button>
           </form>
+          <datalist id="supported-stops">{network?.stops.map((stop) => <option key={stop.id} value={stop.name}>{stop.city}</option>)}</datalist>
         </div>
+        <button className="mx-auto mt-3 flex items-center gap-2 rounded-full border border-[#d5cfc3] bg-white/85 px-4 py-2 text-xs font-semibold text-[#0f4b3c] shadow-sm backdrop-blur transition hover:border-[#155b49]/45 hover:bg-white" onClick={() => setShowNetwork(true)}>{network ? `${network.coverage.hub_count} Maharashtra hubs · ${network.coverage.corridor_count} corridors` : 'Supported prototype network'} <span className="text-[#b63231]">View coverage</span></button>
       </section>
 
-      <section className="mx-auto mt-7 grid w-full max-w-5xl gap-3 px-4 sm:px-6 lg:grid-cols-[190px_1fr_1fr] lg:items-stretch" aria-labelledby="popular-journeys">
-        <div className="flex flex-col justify-center px-2">
+      <section className="mx-auto mt-7 grid w-full max-w-6xl gap-3 px-4 sm:grid-cols-2 sm:px-6 lg:grid-cols-[190px_1fr_1fr] lg:items-stretch" aria-labelledby="popular-journeys">
+        <div className="flex flex-col justify-center px-2 sm:col-span-2 lg:row-span-2 lg:col-span-1">
           <p className="text-[10px] font-black tracking-[0.16em] text-[#a92f2f] uppercase">Popular journeys</p>
           <h2 id="popular-journeys" className="mt-1 text-base font-extrabold tracking-tight text-[#263029]">Start with a route</h2>
         </div>
         <button className="group flex min-h-18 items-center justify-between rounded-xl border border-[#ded8cc] bg-white px-5 text-left transition hover:border-[#155b49]/45 hover:shadow-sm" onClick={() => setQuickJourney('Pune', 'Nashik')}><span><strong className="block text-base font-semibold text-[#17201b]">Pune → Nashik</strong><small className="mt-1 block text-[#6b746e]">Morning services</small></span><span className="text-[#b63231]"><Icon name="arrow" /></span></button>
-        <button className="group flex min-h-18 items-center justify-between rounded-xl border border-[#ded8cc] bg-white px-5 text-left transition hover:border-[#155b49]/45 hover:shadow-sm" onClick={() => setQuickJourney('Pune', 'Demo Destination')}><span><strong className="block text-base font-semibold text-[#17201b]">Pune → Demo Destination</strong><small className="mt-1 block text-[#6b746e]">Preview a connecting journey</small></span><span className="text-[#b63231]"><Icon name="arrow" /></span></button>
+        <button className="group flex min-h-18 items-center justify-between rounded-xl border border-[#ded8cc] bg-white px-5 text-left transition hover:border-[#155b49]/45 hover:shadow-sm" onClick={() => setQuickJourney('Mumbai', 'Pune')}><span><strong className="block text-base font-semibold text-[#17201b]">Mumbai → Pune</strong><small className="mt-1 block text-[#6b746e]">Shivneri and E-Shivai</small></span><span className="text-[#b63231]"><Icon name="arrow" /></span></button>
+        <button className="group flex min-h-18 items-center justify-between rounded-xl border border-[#ded8cc] bg-white px-5 text-left transition hover:border-[#155b49]/45 hover:shadow-sm" onClick={() => setQuickJourney('Pune', 'Kolhapur')}><span><strong className="block text-base font-semibold text-[#17201b]">Pune → Kolhapur</strong><small className="mt-1 block text-[#6b746e]">Direct intercity services</small></span><span className="text-[#b63231]"><Icon name="arrow" /></span></button>
+        <button className="group flex min-h-18 items-center justify-between rounded-xl border border-[#ded8cc] bg-white px-5 text-left transition hover:border-[#155b49]/45 hover:shadow-sm" onClick={() => setQuickJourney('Nagpur', 'Amravati')}><span><strong className="block text-base font-semibold text-[#17201b]">Nagpur → Amravati</strong><small className="mt-1 block text-[#6b746e]">Vidarbha services</small></span><span className="text-[#b63231]"><Icon name="arrow" /></span></button>
       </section>
 
       <footer className="mt-10 w-full border-t border-[#ded8cc] bg-white"><div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-4 text-xs text-[#727a74] sm:px-6"><span>Prototype journey service using synthetic schedules</span><span>No real booking or payment is made</span></div></footer>
+      {showNetwork && <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#17201b]/65 p-4" role="dialog" aria-modal="true" aria-labelledby="network-title"><section className="w-full max-w-3xl rounded-2xl border border-[#ded8cc] bg-white p-5 shadow-[0_24px_72px_rgba(8,23,17,0.3)] sm:p-7"><div className="flex items-start justify-between gap-5"><div><p className="mb-2 text-[10px] font-bold tracking-[0.18em] text-[#a92f2f] uppercase">Illustrative synthetic data</p><h2 id="network-title" className="m-0 text-3xl font-semibold tracking-[-0.03em]">Supported prototype network</h2><p className="mt-2 text-sm leading-6 text-[#68716a]">Search travel from {network ? formatDate(network.coverage_start) : 'tomorrow'} through {network ? formatDate(network.coverage_end) : 'the next 14 days'}. Schedules and fares are not official MSRTC data.</p></div><button className="rounded-xl border border-[#ded8cc] px-4 py-2 text-sm font-semibold text-[#59645e] hover:bg-[#f5f1e9]" onClick={() => setShowNetwork(false)}>Close</button></div><div className="mt-5 grid max-h-[50vh] gap-2 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">{network?.stops.filter((stop) => stop.id !== 'stop_demo_destination').map((stop) => <div key={stop.id} className="rounded-xl border border-[#ded8cc] bg-[#faf8f3] p-3"><strong className="block text-sm">{stop.city}</strong><span className="mt-1 block text-xs text-[#68716a]">{stop.name}</span></div>)}</div></section></div>}
       {error && ErrorView()}
     </div>
   }
@@ -250,6 +366,7 @@ export default function App() {
             {bookStep === 'passenger' && <form className="max-w-2xl" onSubmit={(event) => void savePassenger(event)}>
               <p className="mb-2 text-[10px] font-bold tracking-[0.2em] text-[#a92f2f] uppercase">Passenger details</p>
               <h1 className="m-0 text-4xl leading-none font-semibold tracking-[-0.04em] text-[#101713] sm:text-5xl">Who is travelling?</h1>
+              <p className="mt-3 mb-0 text-sm leading-6 text-[#68716a]"><strong className="text-[#703634]">Prototype only:</strong> use a made-up name and do not enter real personal information.</p>
               <div className="mt-7 grid gap-5 sm:grid-cols-[1fr_150px]">
                 <label className="grid gap-2 text-sm font-semibold text-[#465149]">Full name<input className="min-h-13 rounded-xl border border-[#cbc7bd] bg-white px-4 text-base font-normal text-[#101713] outline-none transition focus:border-[#155b49] focus:ring-4 focus:ring-[#155b49]/10" value={passengerName} onChange={(event) => setPassengerName(event.target.value)} required /></label>
                 <label className="grid gap-2 text-sm font-semibold text-[#465149]">Age<input className="min-h-13 rounded-xl border border-[#cbc7bd] bg-white px-4 text-base font-normal text-[#101713] outline-none transition focus:border-[#155b49] focus:ring-4 focus:ring-[#155b49]/10" type="number" value={passengerAge} min="1" max="120" onChange={(event) => setPassengerAge(event.target.value)} required /></label>
@@ -391,6 +508,7 @@ export default function App() {
   }
   function ErrorView() {
     const isAmbiguousStop = error?.code === 'AMBIGUOUS_STOP'
+    const isDateWindow = error?.code === 'DATE_OUTSIDE_DEMO_WINDOW'
     const candidates = error?.details.candidates ?? []
 
     return <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#17201b]/65 p-4 sm:p-6">
@@ -399,8 +517,8 @@ export default function App() {
         <header className="flex items-start gap-4">
           <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[#edf5f0] text-[#0f4b3c] shadow-sm" aria-hidden="true"><Icon name={isAmbiguousStop ? 'location' : 'sparkle'} /></span>
           <div className="min-w-0 pt-0.5">
-            <p className="mb-1.5 text-[10px] font-bold tracking-[0.18em] text-[#a92f2f] uppercase">{isAmbiguousStop ? 'Confirm your destination' : 'Journey planner'}</p>
-            <h2 className="m-0 text-2xl leading-tight font-semibold tracking-[-0.025em] text-[#101713] sm:text-[28px]">{isAmbiguousStop ? 'Which stop did you mean?' : 'Something went wrong'}</h2>
+            <p className="mb-1.5 text-[10px] font-bold tracking-[0.18em] text-[#a92f2f] uppercase">{isAmbiguousStop ? 'Confirm your destination' : isDateWindow ? 'Supported travel dates' : 'Journey planner'}</p>
+            <h2 className="m-0 text-2xl leading-tight font-semibold tracking-[-0.025em] text-[#101713] sm:text-[28px]">{isAmbiguousStop ? 'Which stop did you mean?' : isDateWindow ? 'Choose a date in the demo window.' : 'Something went wrong'}</h2>
             <p className="mt-2 mb-0 text-sm leading-6 text-[#68716a] sm:text-base">{error?.message}</p>
           </div>
         </header>
@@ -416,7 +534,7 @@ export default function App() {
           </button>)}
         </div>}
 
-        {!isAmbiguousStop && <button className="mt-6 rounded-xl bg-[#0f4b3c] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#14624e]" onClick={() => setError(null)}>Return to journey planner</button>}
+        {!isAmbiguousStop && <button className="mt-6 rounded-xl bg-[#0f4b3c] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#14624e]" onClick={() => { setError(null); setLoading(false); setIsParsing(false); setResumeAiSearch(false); setIntentMessage('') }}>Return to journey planner</button>}
       </section>
     </div>
   }

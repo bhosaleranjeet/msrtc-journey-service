@@ -57,3 +57,31 @@ The public submission may host the static Vite frontend on Vercel while retainin
 - Date: 2026-08-28
 
 The mock transport provider seeds tomorrow in the Asia/Kolkata timezone when the backend starts, and the frontend uses the same timezone for its initial date. This preserves deterministic data within each running demo while preventing the public prototype from presenting a permanently stale service date. Natural-language parsing uses the backend-owned demo reference date when the client does not explicitly supply one.
+
+## ADR-009 — Use a frontend-only gate for controlled prototype access
+
+- Status: accepted
+- Date: 2026-08-28
+
+The submitted prototype uses one build-time-configurable username and password to place a lightweight access step before the journey planner. Authentication state lasts only for the current browser tab and the interface explicitly states that this is not secure authentication. The credentials are necessarily visible in the compiled frontend and no backend endpoint treats the gate as authorization; production identity and access control remain out of scope.
+
+## ADR-010 — Remember the latest prototype booking reference in the browser
+
+- Status: accepted
+- Date: 2026-08-28
+
+The frontend stores only the latest confirmed booking ID in local storage so the single demo user can reopen a journey after refresh or sign-in. The booking, ticket, and cancellation state are always reloaded from the backend rather than duplicated in browser storage. This provides a credible “My booking” path without introducing a customer-account or booking-list API. Its original process-local persistence limitation is superseded by ADR-011.
+
+## ADR-011 — Persist deterministic synthetic transport and booking state in SQL
+
+- Status: accepted
+- Date: 2026-08-28
+
+The prototype uses SQLAlchemy repositories with SQLite as the zero-configuration local fallback and PostgreSQL as the production database. A rolling, idempotent seed supplies broad but explicitly illustrative Maharashtra coverage; it never claims official MSRTC truth. Confirmed seats are stored independently from temporary holds, and PostgreSQL row locking plus a unique hold key protects seat acquisition. This replaces the process-local limitation described when ADR-007 and ADR-010 were written.
+
+## ADR-012 — AI may interpret searches but cannot create transport operations
+
+- Status: accepted
+- Date: 2026-08-28
+
+Natural-language AI output is limited to origin, destination, date, time, and preferences validated against typed schemas. Routes, departures, fares, availability, connections, bookings, and refunds must come from deterministic repository data. This avoids presenting plausible model output as a real bus service and keeps the prototype reproducible even though no suitable official open MSRTC API is available.

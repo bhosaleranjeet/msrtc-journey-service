@@ -4,14 +4,14 @@ from uuid import uuid4
 
 from app.domain.bookings.models import Booking, BookingStatus
 from app.domain.tickets.models import Ticket
-from app.repositories.tickets import InMemoryTicketRepository
+from app.repositories.tickets import TicketRepository
 from app.repositories.transport import TransportRepository
 from app.schemas.tickets import JourneyPass
 from app.services.journey_service import JourneyDomainError
 
 
 class TicketService:
-    def __init__(self, transport: TransportRepository, tickets: InMemoryTicketRepository, clock: Callable[[], datetime] | None = None) -> None:
+    def __init__(self, transport: TransportRepository, tickets: TicketRepository, clock: Callable[[], datetime] | None = None) -> None:
         self._transport = transport
         self._tickets = tickets
         self._clock = clock or (lambda: datetime.now(UTC))

@@ -247,6 +247,8 @@ PostgreSQL is the preferred persistence layer.
 
 For an initial prototype, SQLite may be used temporarily if it materially accelerates setup, but application data access should remain repository-based so moving to PostgreSQL does not affect domain logic.
 
+Implementation status (2026-08-28): SQLAlchemy repository protocols now back both environments. Local development falls back to SQLite, while production accepts a pooled PostgreSQL `DATABASE_URL`. Alembic owns schema migration and an idempotent startup seed creates the active 14-day synthetic network without replacing trips that may already have bookings. `booking_seats` is durable confirmed inventory; `seat_holds` is transient contention state.
+
 ⸻
 
 5. Backend Layering

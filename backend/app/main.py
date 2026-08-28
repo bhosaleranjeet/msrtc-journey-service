@@ -9,21 +9,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 
-from app.integrations.msrtc.mock_provider import DEMO_DATE, MockTransportProvider
+load_dotenv()
+
 from app.integrations.openai.intent_provider import IntentProviderError, configured_intent_provider
 from app.schemas.intent import IntentParseRequest
 from app.schemas.journeys import JourneySearchRequest
 from app.schemas.bookings import CreateBookingRequest, PassengerRequest, PaymentRequest, SelectSeatsRequest
-from app.repositories.bookings import InMemoryBookingRepository
-from app.repositories.tickets import InMemoryTicketRepository
 from app.integrations.payments.mock_provider import MockPaymentProvider
+from app.persistence.database import Base, SessionLocal, engine
+from app.persistence.seed import active_date_window, seed_database
+from app.repositories.sql import SqlBookingRepository, SqlTicketRepository, SqlTransportRepository
 from app.services.booking_service import BookingService
 from app.services.ticket_service import TicketService
 from app.services.intent_service import IntentService
 from app.services.journey_service import JourneyDomainError, JourneyService
 from app.core.events import emit_domain_event
 
-load_dotenv()
+Base.metadata.create_all(engine)
+seed_database(SessionLocal)
 
 app = FastAPI(
     title="Citizen-First MSRTC Journey API",
@@ -39,10 +42,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-transport_provider = MockTransportProvider()
-booking_repository = InMemoryBookingRepository()
+transport_provider = SqlTransportRepository(SessionLocal)
+booking_repository = SqlBookingRepository(SessionLocal)
 payment_provider = MockPaymentProvider()
-ticket_repository = InMemoryTicketRepository()
+ticket_repository = SqlTicketRepository(SessionLocal)
 
 
 @app.exception_handler(JourneyDomainError)
@@ -80,19 +83,25 @@ def intent_service() -> IntentService:
 @app.get("/api/health")
 def health_check() -> dict[str, str]:
     """Confirm that the local prototype API is running."""
-    return {"status": "ok", "data_mode": "synthetic"}
+    return {"status": "ok", "data_mode": "seeded_synthetic"}
 
 
 @app.get("/api/demo-network")
-def demo_network() -> dict[str, object]:
-    """Expose synthetic demo data for local verification; not a production MSRTC feed."""
-    provider = MockTransportProvider()
+def demo_network(summary: bool = False) -> dict[str, object]:
+    """Expose the supported synthetic network; this is not an official MSRTC feed."""
+    start_date, end_date = transport_provider.supported_date_range()
     return {
-        "data_mode": "synthetic",
-        "journey_date": DEMO_DATE,
-        "stops": provider.list_stops(),
-        "services": provider.list_services(),
-        "trips": provider.list_trips(),
+        "data_mode": "seeded_synthetic",
+        "journey_date": start_date,
+        "coverage": transport_provider.network_metadata(),
+        "coverage_start": start_date,
+        "coverage_end": end_date,
+        "stops": transport_provider.list_stops(),
+        "services": [] if summary else transport_provider.list_services(),
+        "trips": [] if summary else [
+            trip for trip in transport_provider.list_trips()
+            if start_date <= trip.journey_date <= end_date
+        ],
     }
 
 
@@ -110,7 +119,7 @@ def search_journeys(request: JourneySearchRequest) -> object:
 
 @app.post("/api/intent/parse")
 def parse_intent(request: IntentParseRequest) -> object:
-    reference_date = request.reference_date or DEMO_DATE - timedelta(days=1)
+    reference_date = request.reference_date or active_date_window()[0] - timedelta(days=1)
     intent = intent_service().parse(request.query, reference_date)
     emit_domain_event("intent.parsed", has_time_window=intent.time_window is not None, air_conditioned=intent.preferences.air_conditioned)
     return intent

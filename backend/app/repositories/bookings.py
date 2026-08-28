@@ -1,7 +1,22 @@
 from datetime import datetime
 from threading import RLock
+from typing import Protocol
 
 from app.domain.bookings.models import Booking
+
+
+class BookingRepository(Protocol):
+    def create(self, booking: Booking) -> Booking: ...
+    def save(self, booking: Booking) -> Booking: ...
+    def get(self, booking_id: str) -> Booking | None: ...
+    def holder_for(self, seat_id: str) -> str | None: ...
+    def is_booked(self, seat_id: str) -> bool: ...
+    def try_hold_seats(self, booking: Booking, seat_ids: tuple[str, ...], expires_at: datetime) -> bool: ...
+    def protect_seats(self, booking: Booking) -> None: ...
+    def book_seats(self, booking: Booking) -> None: ...
+    def release_seats(self, booking: Booking) -> None: ...
+    def release_booked_seats(self, booking: Booking) -> None: ...
+    def expire_holds(self, now: datetime) -> None: ...
 
 
 class InMemoryBookingRepository:
@@ -9,7 +24,7 @@ class InMemoryBookingRepository:
 
     def __init__(self) -> None:
         self._bookings: dict[str, Booking] = {}
-        self._seat_holds: dict[str, tuple[str, datetime]] = {}
+        self._seat_holds: dict[str, tuple[str, datetime | None]] = {}
         self._booked_seat_ids: set[str] = set()
         self._lock = RLock()
 
@@ -22,6 +37,11 @@ class InMemoryBookingRepository:
         with self._lock:
             return self._bookings.get(booking_id)
 
+    def save(self, booking: Booking) -> Booking:
+        with self._lock:
+            self._bookings[booking.id] = booking
+            return booking
+
     def holder_for(self, seat_id: str) -> str | None:
         with self._lock:
             hold = self._seat_holds.get(seat_id)
@@ -31,10 +51,30 @@ class InMemoryBookingRepository:
         with self._lock:
             return seat_id in self._booked_seat_ids
 
-    def hold_seats(self, booking: Booking, seat_ids: tuple[str, ...], expires_at: datetime) -> None:
+    def try_hold_seats(self, booking: Booking, seat_ids: tuple[str, ...], expires_at: datetime) -> bool:
         with self._lock:
             for seat_id in seat_ids:
+                hold = self._seat_holds.get(seat_id)
+                if seat_id in self._booked_seat_ids or (hold and hold[0] != booking.id):
+                    return False
+            for seat_id, hold in tuple(self._seat_holds.items()):
+                if hold[0] == booking.id and seat_id not in seat_ids:
+                    self._seat_holds.pop(seat_id, None)
+            for seat_id in seat_ids:
                 self._seat_holds[seat_id] = (booking.id, expires_at)
+            self.save(booking)
+            return True
+
+    def hold_seats(self, booking: Booking, seat_ids: tuple[str, ...], expires_at: datetime) -> None:
+        """Compatibility shim for older repository-level tests."""
+        self.try_hold_seats(booking, seat_ids, expires_at)
+
+    def protect_seats(self, booking: Booking) -> None:
+        with self._lock:
+            for seat_id in booking.selected_seat_ids:
+                hold = self._seat_holds.get(seat_id)
+                if hold and hold[0] == booking.id:
+                    self._seat_holds[seat_id] = (booking.id, None)
 
     def book_seats(self, booking: Booking) -> None:
         with self._lock:
@@ -56,8 +96,14 @@ class InMemoryBookingRepository:
 
     def expire_holds(self, now: datetime) -> None:
         with self._lock:
-            expired_booking_ids = {booking_id for booking_id, expires_at in self._seat_holds.values() if expires_at <= now}
-            self._seat_holds = {seat_id: hold for seat_id, hold in self._seat_holds.items() if hold[1] > now}
+            expired_booking_ids = {
+                booking_id for booking_id, expires_at in self._seat_holds.values()
+                if expires_at is not None and expires_at <= now
+            }
+            self._seat_holds = {
+                seat_id: hold for seat_id, hold in self._seat_holds.items()
+                if hold[1] is None or hold[1] > now
+            }
             for booking_id in expired_booking_ids:
                 booking = self._bookings.get(booking_id)
                 if booking:

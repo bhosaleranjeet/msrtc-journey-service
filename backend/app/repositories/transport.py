@@ -5,6 +5,7 @@ implement the same protocol later without changing journey-domain code.
 """
 
 from collections.abc import Iterable
+from datetime import date
 from typing import Protocol
 
 from app.domain.transport.models import Route, Seat, Service, Stop, TripInstance
@@ -20,6 +21,8 @@ class TransportRepository(Protocol):
     def list_trips(self) -> tuple[TripInstance, ...]: ...
 
     def list_seats(self, trip_id: str) -> tuple[Seat, ...]: ...
+
+    def supported_date_range(self) -> tuple[date, date]: ...
 
 
 class InMemoryTransportRepository:
@@ -52,3 +55,7 @@ class InMemoryTransportRepository:
 
     def list_seats(self, trip_id: str) -> tuple[Seat, ...]:
         return tuple(seat for seat in self._seats if seat.trip_id == trip_id)
+
+    def supported_date_range(self) -> tuple[date, date]:
+        dates = tuple(trip.journey_date for trip in self._trips)
+        return min(dates), max(dates)

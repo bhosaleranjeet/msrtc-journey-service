@@ -24,7 +24,7 @@ Within about one minute, a passenger can search for a journey, understand availa
 
 ## MVP boundary
 
-The MVP supports direct journeys and journeys with one transfer, seat selection, a mock payment lifecycle, ticket issuance, and cancellation/refund presentation. It excludes authentication, real MSRTC/payment/GPS integrations, full network coverage, and operational tooling.
+The MVP supports a deterministic 15-hub Maharashtra prototype network, direct journeys and journeys with one transfer, seat selection, a mock payment lifecycle, ticket issuance, cancellation/refund presentation, and a frontend-only demo access gate. It excludes real authentication, official or complete MSRTC network coverage, real payment/GPS integrations, and operational tooling.
 
 ## Demo scenarios
 

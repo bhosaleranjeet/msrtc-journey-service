@@ -9,7 +9,7 @@ Hackathon prototype for intent-first MSRTC journey discovery and booking. Transp
 
 ## Run locally
 
-Create local configuration from `.env.example`. Add an OpenAI key to enable natural-language intent parsing; the structured search remains available without one.
+Create local configuration from `.env.example`. Add an OpenAI key to enable natural-language intent parsing; the structured search remains available without one. Without `DATABASE_URL`, the backend uses `sqlite:///./msrtc.db` and seeds the supported network at startup.
 
 ```sh
 cp .env.example .env
@@ -21,6 +21,7 @@ python3 -m venv .venv
 Run the backend:
 
 ```sh
+.venv/bin/alembic -c backend/alembic.ini upgrade head
 .venv/bin/uvicorn app.main:app --app-dir backend --reload --port 8000
 ```
 
@@ -34,7 +35,7 @@ The frontend runs on `http://localhost:5173`; Vite proxies `/api` calls to the b
 
 ## Demo scripts
 
-All transport, seat, payment, refund and ticket data is seeded synthetic data. Do not represent this prototype as connected to MSRTC or a real payment provider.
+All transport, seat, payment, refund and ticket data is seeded synthetic data. The 15-hub network, schedules, availability and fares are illustrative, not an official MSRTC feed. Do not enter real passenger information or represent this prototype as connected to MSRTC or a real payment provider.
 
 ### Direct journey and booking
 
@@ -52,11 +53,20 @@ All transport, seat, payment, refund and ticket data is seeded synthetic data. D
 
 The included `Dockerfile` produces a single deployment unit: it builds the frontend and serves it, together with the FastAPI API, from one origin. The hosting platform supplies HTTPS; never commit deployment secrets.
 
-For Render, connect this repository and create the Blueprint from `render.yaml`. Set `OPENAI_API_KEY` in Render's secret environment-variable UI (or leave it unset to demonstrate the structured-search fallback). The generated `https://…onrender.com` URL should return `{"status":"ok","data_mode":"synthetic"}` at `/api/health`.
+For Render, connect this repository and create the Blueprint from `render.yaml`. Set `OPENAI_API_KEY` in Render's secret environment-variable UI (or leave it unset to demonstrate the structured-search fallback). Also set `DATABASE_URL` to a pooled Neon PostgreSQL connection string with TLS enabled. The generated `https://…onrender.com` URL should return `{"status":"ok","data_mode":"seeded_synthetic"}` at `/api/health`.
+
+### Neon database for Render
+
+1. Create a free Neon project in a nearby region and copy its pooled connection URL.
+2. Ensure the URL includes `sslmode=require`; keep it only in Render's secret environment-variable UI.
+3. Set Render `DATABASE_URL` to that value and redeploy. The Docker start command runs `alembic upgrade head` before the API starts.
+4. Open `/api/demo-network?summary=true` and verify `hub_count: 15`, the active coverage dates, and non-zero route/service/trip counts.
+
+The seed is safe to run on every restart: it adds missing rolling dates and does not overwrite an existing trip or its booking inventory.
 
 ### Vercel frontend + Render backend
 
-The current booking and ticket repositories are process-local, so keep the FastAPI backend on the long-running Render Docker service for a reliable demo. Deploy only the static frontend to Vercel:
+The booking and ticket repositories are persistent, but the FastAPI backend still belongs on Render because it owns the API, migrations, and database transactions. Deploy only the static frontend to Vercel:
 
 1. Push the repository to a Git provider and import it into Vercel.
 2. Set the Vercel project **Root Directory** to `frontend`. The included `frontend/vercel.json` builds the Vite app into `dist`.
@@ -64,7 +74,7 @@ The current booking and ticket repositories are process-local, so keep the FastA
 4. Set `FRONTEND_ORIGINS` in Render to the exact Vercel production URL. Add comma-separated preview origins only if they are intentionally supported.
 5. Set `OPENAI_API_KEY` and `OPENAI_MODEL` on Render, then verify both the Vercel homepage and the Render `/api/health` endpoint.
 
-Do not deploy the current in-memory FastAPI booking backend as independently scaling serverless functions. Replace its booking and ticket repositories with persistent storage first if an all-Vercel deployment is required.
+Do not expose the frontend-only demo login as a security boundary. The production database and API still contain prototype-only data and require normal platform secret controls.
 
 Before sharing the public URL, run:
 

@@ -5,7 +5,7 @@ from uuid import uuid4
 from app.domain.bookings.models import Booking, BookingStatus
 from app.domain.transport.models import SeatStatus
 from app.integrations.payments.mock_provider import PaymentProvider
-from app.repositories.bookings import InMemoryBookingRepository
+from app.repositories.bookings import BookingRepository
 from app.repositories.transport import TransportRepository
 from app.schemas.bookings import BookingResponse, BookingSeat, CancellationPreview, PassengerRequest
 from app.services.journey_service import JourneyDomainError
@@ -14,7 +14,7 @@ HOLD_DURATION = timedelta(minutes=10)
 
 
 class BookingService:
-    def __init__(self, transport: TransportRepository, bookings: InMemoryBookingRepository, payments: PaymentProvider, clock: Callable[[], datetime] | None = None) -> None:
+    def __init__(self, transport: TransportRepository, bookings: BookingRepository, payments: PaymentProvider, clock: Callable[[], datetime] | None = None) -> None:
         self._transport = transport
         self._bookings = bookings
         self._payments = payments
@@ -53,7 +53,13 @@ class BookingService:
             selected.append(seat)
         expires_at = self._clock() + HOLD_DURATION
         booking.hold_seats(tuple(seat.id for seat in selected), expires_at)
-        self._bookings.hold_seats(booking, booking.selected_seat_ids, expires_at)
+        if not self._bookings.try_hold_seats(booking, booking.selected_seat_ids, expires_at):
+            raise JourneyDomainError(
+                "SEAT_UNAVAILABLE",
+                "One of those seats is currently being selected by another passenger.",
+                {},
+                409,
+            )
         return self._response(booking)
 
     def add_passenger(self, booking_id: str, request: PassengerRequest) -> BookingResponse:
@@ -66,6 +72,7 @@ class BookingService:
             booking.add_passenger(request.to_domain(), base_fare, discount)
         except ValueError as error:
             raise JourneyDomainError("INVALID_BOOKING_STATE", str(error), {}, 409) from error
+        self._bookings.save(booking)
         return self._response(booking)
 
     def begin_payment(self, booking_id: str, confirmation_should_fail: bool) -> BookingResponse:
@@ -73,10 +80,12 @@ class BookingService:
         booking = self._booking_or_error(booking_id)
         try:
             booking.begin_payment(confirmation_should_fail)
+            self._bookings.protect_seats(booking)
             receipt = self._payments.create_payment(booking.total_fare_inr)
             booking.receive_payment(receipt.reference)
         except ValueError as error:
             raise JourneyDomainError("INVALID_BOOKING_STATE", str(error), {}, 409) from error
+        self._bookings.save(booking)
         return self._response(booking)
 
     def confirm(self, booking_id: str) -> BookingResponse:
@@ -98,7 +107,9 @@ class BookingService:
         deadline = trip.departure_at - timedelta(hours=2)
         if booking.status != BookingStatus.CONFIRMED:
             return CancellationPreview(can_cancel=False, reason="Only a confirmed booking can be cancelled.", deadline=None, paid_amount_inr=booking.total_fare_inr, deduction_inr=0, non_refundable_charges_inr=0, refund_amount_inr=0)
-        now = self._clock().replace(tzinfo=None)
+        now = self._clock()
+        if deadline.tzinfo is None:
+            now = now.replace(tzinfo=None)
         if now >= deadline:
             return CancellationPreview(can_cancel=False, reason="The cancellation deadline has passed.", deadline=deadline, paid_amount_inr=booking.total_fare_inr, deduction_inr=0, non_refundable_charges_inr=0, refund_amount_inr=0)
         deduction = round(booking.total_fare_inr * 0.10)
@@ -126,6 +137,7 @@ class BookingService:
             booking.advance_refund()
         except ValueError as error:
             raise JourneyDomainError("INVALID_BOOKING_STATE", str(error), {}, 409) from error
+        self._bookings.save(booking)
         return self._response(booking)
 
     def _response(self, booking: Booking) -> BookingResponse:
