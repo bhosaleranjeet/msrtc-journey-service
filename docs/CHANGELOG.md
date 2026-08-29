@@ -11,6 +11,8 @@ All notable implementation and documentation changes are recorded here.
 - Added separate confirmed-seat and temporary-hold records, transactional hold acquisition, persisted passengers/tickets/refunds, and restart-safe booking management.
 - Added Alembic migrations, Neon/Render database configuration, `seeded_synthetic` health metadata, network coverage/count metadata, and a specific supported-date API error.
 - Added manual stop suggestions, a supported-network disclosure, four representative direct-route shortcuts, date constraints, and a warning not to enter real passenger information.
+- Added a prominent dedicated tester-guide page with eight exact working scenarios, expected outcomes, prototype boundaries and a free-host cold-start notice; kept a five-question reviewer FAQ at the bottom of the landing page.
+- Simplified the tester guide into one ordered reviewer checklist with a clear starting point, compact network facts, quieter cold-start guidance and a single prototype-boundaries note.
 
 - Added a frontend-only prototype login gate with one configurable demo credential pair, session-scoped access, explicit security disclosure, and sign-out control.
 - Added persistent access to the latest confirmed booking: the frontend remembers its booking reference locally and a global “My booking” action restores the backend record, journey pass details, and cancellation screen after refresh or sign-in.
