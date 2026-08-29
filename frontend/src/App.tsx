@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Icon } from './components/Icon'
+import { ProductFaq, TesterGuidePage } from './components/TesterGuide'
 import maharashtraHero from './assets/maharashtra-journey-hero.jpg'
 import msrtcLogo from './assets/msrtc-emblem.png'
 import type { ApiError, Booking, CancellationPreview, ConnectingJourney, DemoNetwork, Journey, JourneyPass, ParsedIntent, Passenger, StopCandidate } from './types'
@@ -22,7 +23,7 @@ const dateInIndia = (daysFromToday = 0) => {
   return `${value.year}-${value.month}-${value.day}`
 }
 const DEMO_DATE = dateInIndia(1)
-type Stage = 'plan' | 'choose' | 'book' | 'pass' | 'manage'
+type Stage = 'plan' | 'choose' | 'book' | 'pass' | 'manage' | 'test'
 type SearchCriteria = { origin: string; destination: string; journeyDate: string; acOnly: boolean }
 
 const formatTime = (value: string) => new Intl.DateTimeFormat('en-IN', { hour: 'numeric', minute: '2-digit' }).format(new Date(value))
@@ -100,6 +101,39 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: () => void }) {
   </main>
 }
 
+type AppHeaderProps = {
+  stage: Stage
+  working: boolean
+  onStageChange: (stage: Stage) => void
+  onMyBooking: () => void
+  onSignOut: () => void
+}
+
+function AppHeader({ stage, working, onStageChange, onMyBooking, onSignOut }: AppHeaderProps) {
+  const navClass = (active: boolean, accent = false) => `relative flex h-full items-center border-x-0 border-t-0 border-b-2 bg-transparent px-2 text-xs font-semibold transition focus-visible:outline-3 focus-visible:outline-offset-[-5px] focus-visible:outline-[#e4bd73] sm:px-3 sm:text-sm ${active ? 'border-[#b63231] text-[#17201b]' : `border-transparent ${accent ? 'text-[#a92f2f]' : 'text-[#59645e]'} hover:text-[#17201b]`}`
+
+  return (
+    <header className="h-[72px] border-b border-[#ded8cc] bg-white">
+      <div className="mx-auto flex h-full w-full max-w-6xl items-center px-4 sm:px-6">
+        <button className="flex h-[42px] w-12 items-center justify-center border-0 bg-transparent p-0" aria-label="Go to journey planner" onClick={() => onStageChange('plan')}>
+          <img src={msrtcLogo} alt="" className="h-[42px] w-auto max-w-full object-contain" />
+        </button>
+
+        <nav className="ml-2 flex h-full items-center border-l border-[#ded8cc] pl-2 sm:ml-5 sm:pl-3" aria-label="Primary navigation">
+          <button className={`${navClass(stage === 'plan')} hidden sm:flex`} onClick={() => onStageChange('plan')}>Plan journey</button>
+          <button className={navClass(stage === 'test', true)} onClick={() => onStageChange('test')}>What works</button>
+        </nav>
+
+        <div className="ml-auto flex h-full items-center gap-0.5 sm:gap-1">
+          <button className="px-2 py-2 text-xs font-semibold text-[#0f4b3c] transition hover:text-[#a92f2f] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[#e4bd73] sm:px-3 sm:text-sm" onClick={onMyBooking} disabled={working}><span className="sm:hidden">Booking</span><span className="hidden sm:inline">My booking</span></button>
+          <span className="mx-1 hidden rounded-full border border-[#c99a43] px-2.5 py-1 text-[10px] font-semibold text-[#755419] lg:inline-flex">Prototype</span>
+          <button className="px-2 py-2 text-xs font-medium text-[#68716a] transition hover:text-[#a92f2f] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[#e4bd73] sm:px-3 sm:text-sm" onClick={onSignOut}>Sign out</button>
+        </div>
+      </div>
+    </header>
+  )
+}
+
 function JourneyApp({ onSignOut }: { onSignOut: () => void }) {
   const [stage, setStage] = useState<Stage>('plan')
   const [origin, setOrigin] = useState('Pune'), [destination, setDestination] = useState('Nashik'), [journeyDate, setJourneyDate] = useState(DEMO_DATE)
@@ -171,7 +205,7 @@ function JourneyApp({ onSignOut }: { onSignOut: () => void }) {
   async function advanceRefund() { const response = await bookingRequest('/refund/advance', { method: 'POST' }); if (response) setBooking((await response.json()) as Booking) }
   const bookStep = !booking || booking.status === 'DRAFT' ? 'seat' : booking.status === 'SEATS_HELD' && !booking.passenger ? 'passenger' : booking.status === 'SEATS_HELD' ? 'payment' : booking.status === 'PAYMENT_RECEIVED' ? 'confirm' : booking.status === 'CONFIRMED' ? 'confirmed' : 'failed'
 
-  return <div className="min-h-screen bg-[#f5f1e9] font-sans text-[#17201b]"><header className="h-[72px] border-b border-[#ded8cc] bg-white"><div className="mx-auto flex h-full w-full max-w-6xl items-center px-4 sm:px-6"><button className="flex h-[42px] w-12 items-center justify-center border-0 bg-transparent p-0" aria-label="Go to journey planner" onClick={() => setStage('plan')}><img src={msrtcLogo} alt="" className="h-[42px] w-auto max-w-full object-contain" /></button><div className="ml-5 hidden border-l border-[#ded8cc] pl-5 text-sm text-[#68716a] sm:block">{stage === 'plan' ? 'Plan a journey' : stage === 'choose' ? 'Choose a service' : stage === 'book' ? 'Complete booking' : stage === 'pass' ? 'Your journey pass' : 'Manage journey'}</div><div className="ml-auto flex items-center gap-1 sm:gap-2"><span className="hidden rounded-full border border-[#c99a43] px-3 py-1.5 text-xs font-semibold text-[#755419] sm:inline-flex">Prototype</span><button className="rounded-full px-2.5 py-1.5 text-xs font-semibold text-[#0f4b3c] transition hover:bg-[#eaf3ee] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[#e4bd73] sm:px-3" onClick={() => void openMyBooking()} disabled={working}>My booking</button><button className="rounded-full px-2.5 py-1.5 text-xs font-semibold text-[#59645e] transition hover:bg-[#f5f1e9] hover:text-[#a92f2f] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[#e4bd73] sm:px-3" onClick={onSignOut}>Sign out</button></div></div></header><main>{stage === 'plan' && PlanScreen()}{stage === 'choose' && ChooseScreen()}{stage === 'book' && BookScreen()}{stage === 'pass' && PassScreen()}{stage === 'manage' && ManageScreen()}</main></div>
+  return <div className="min-h-screen bg-[#f5f1e9] font-sans text-[#17201b]"><AppHeader stage={stage} working={working} onStageChange={setStage} onMyBooking={() => void openMyBooking()} onSignOut={onSignOut} /><main>{stage === 'plan' && PlanScreen()}{stage === 'choose' && ChooseScreen()}{stage === 'book' && BookScreen()}{stage === 'pass' && PassScreen()}{stage === 'manage' && ManageScreen()}{stage === 'test' && <TesterGuidePage network={network} onBack={() => setStage('plan')} />}</main></div>
 
   function PlanScreen() {
     const aiWorking = isParsing || (loading && resumeAiSearch)
@@ -233,7 +267,9 @@ function JourneyApp({ onSignOut }: { onSignOut: () => void }) {
         <button className="group flex min-h-18 items-center justify-between rounded-xl border border-[#ded8cc] bg-white px-5 text-left transition hover:border-[#155b49]/45 hover:shadow-sm" onClick={() => setQuickJourney('Nagpur', 'Amravati')}><span><strong className="block text-base font-semibold text-[#17201b]">Nagpur → Amravati</strong><small className="mt-1 block text-[#6b746e]">Vidarbha services</small></span><span className="text-[#b63231]"><Icon name="arrow" /></span></button>
       </section>
 
-      <footer className="mt-10 w-full border-t border-[#ded8cc] bg-white"><div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-4 text-xs text-[#727a74] sm:px-6"><span>Prototype journey service using synthetic schedules</span><span>No real booking or payment is made</span></div></footer>
+      <ProductFaq />
+
+      <footer className="w-full border-t border-[#ded8cc] bg-white"><div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-4 text-xs text-[#727a74] sm:px-6"><span>Prototype journey service using synthetic schedules</span><span>No real booking or payment is made</span></div></footer>
       {showNetwork && <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#17201b]/65 p-4" role="dialog" aria-modal="true" aria-labelledby="network-title"><section className="w-full max-w-3xl rounded-2xl border border-[#ded8cc] bg-white p-5 shadow-[0_24px_72px_rgba(8,23,17,0.3)] sm:p-7"><div className="flex items-start justify-between gap-5"><div><p className="mb-2 text-[10px] font-bold tracking-[0.18em] text-[#a92f2f] uppercase">Illustrative synthetic data</p><h2 id="network-title" className="m-0 text-3xl font-semibold tracking-[-0.03em]">Supported prototype network</h2><p className="mt-2 text-sm leading-6 text-[#68716a]">Search travel from {network ? formatDate(network.coverage_start) : 'tomorrow'} through {network ? formatDate(network.coverage_end) : 'the next 14 days'}. Schedules and fares are not official MSRTC data.</p></div><button className="rounded-xl border border-[#ded8cc] px-4 py-2 text-sm font-semibold text-[#59645e] hover:bg-[#f5f1e9]" onClick={() => setShowNetwork(false)}>Close</button></div><div className="mt-5 grid max-h-[50vh] gap-2 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">{network?.stops.filter((stop) => stop.id !== 'stop_demo_destination').map((stop) => <div key={stop.id} className="rounded-xl border border-[#ded8cc] bg-[#faf8f3] p-3"><strong className="block text-sm">{stop.city}</strong><span className="mt-1 block text-xs text-[#68716a]">{stop.name}</span></div>)}</div></section></div>}
       {error && ErrorView()}
     </div>
