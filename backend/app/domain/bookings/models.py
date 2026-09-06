@@ -43,6 +43,7 @@ class Passenger(BaseModel):
 class Booking(BaseModel):
     id: str
     trip_id: str
+    trip_ids: tuple[str, ...] = ()
     status: BookingStatus = BookingStatus.DRAFT
     selected_seat_ids: tuple[str, ...] = ()
     created_at: datetime

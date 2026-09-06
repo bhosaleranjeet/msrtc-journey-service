@@ -6,6 +6,27 @@ All notable implementation and documentation changes are recorded here.
 
 ### Added
 
+- Added Round 2 localization foundations with persisted English/Marathi presentation state, document-language metadata, and a deterministic translation dictionary for the global shell and journey planner controls.
+- Added progressive browser voice journey input with Marathi/English recognition selection, explicit listening/error/cancel states, editable transcript retention, and text-search fallback.
+- Replaced browser-language-bound transcription with short, user-initiated multilingual audio transcription. The transcript auto-detects Marathi, English, and code-switching before entering the existing intent/search pipeline; recordings are not persisted.
+- Extended the compatible booking contract for an ordered two-leg itinerary, durable `booking_trips` persistence, cross-leg selected-seat validation, combined fare calculation, and a connected-journey section on the Journey Pass.
+- Added customer-facing synthetic bus assignment/tracking states and ticket-linked structured complaint submission with optional local image selection and simulated complaint references. These features explicitly disclose that they are not connected to MSRTC, GPS, or complaint systems.
+- Curated the synthetic transport data to six deliberate demo corridors and four guided journeys. Every Nashik stop shown by the resolver now has a matching Pune service, and the only advertised connection is Pune → Demo Destination via Satara.
+- Kept curated timetable reference data in sync on every backend startup, so an existing local database also receives the timed Pune → Satara → Demo Destination connection rather than retaining a stale, invalid transfer.
+- Replaced the connected-journey same-seat shortcut with independent seat selection for each bus. Both selections are validated and held atomically before the passenger step, while the Journey Pass continues to show the seat for each leg.
+- Simplified connected Journey Passes so their primary route and timing describe the complete itinerary, with the individual buses shown once in a compact transfer summary.
+- Replaced the single latest-booking shortcut with a browser-local list of up to five recent confirmed prototype bookings; connected legs remain one booking reference with their own leg details.
+- Completed keyed English/Marathi coverage across dynamic stop resolution, direct and connected booking, Journey Pass, management, tracking, complaints, error dialogs, unsupported-route guidance, and the reviewer guide while keeping canonical stop identities at the API boundary.
+- Reworked voice search into the same deterministic journey pipeline as typed/manual search, with server-side multilingual transcription, longer end-of-speech handling, editable transcripts, ambiguous-stop continuation, explicit capture cleanup, and compact processing feedback.
+- Finished the six-state synthetic tracking experience, compact mock-map/status presentation, journey-linked complaint evidence preview, ticket status confirmation, and context-aware return navigation.
+- Replaced stale reviewer/deployment guidance with the four-hub, six-corridor scenario-led network and a fully bookable two-bus demonstration with an independent seat on each leg.
+- Made the Round 2 booking-leg migration safe for both existing Round 1 databases and fresh installations whose initial metadata already includes the new table.
+- Completed the Round 2 functional acceptance audit: connected drafts now revalidate route continuity, dates, transfer bounds, and live inventory; each bus requires its own seat; cancellation releases both legs; issued passes remain reopenable after cancellation; and complaint image metadata is validated by both client and API without storing evidence bytes.
+- Completed the final-round presentation audit with semantic design tokens, consistent spacing/radii/shadows, calmer motion, compact mobile navigation and summaries, flatter transactional layouts, accessible modal focus handling, complete seeded-service localization, and rendered mobile/desktop verification across the full journey and aftercare flow.
+- Stabilized voice transcription language selection by passing the active English/Marathi locale as a validated server hint and supplying Maharashtra journey vocabulary, preventing short English recordings from being misdetected as unrelated languages while retaining code-switch context.
+- Kept advertised demo routes reliable after repeated local bookings consume a date’s synthetic inventory: supported searches now advance to the next available seeded date, update the visible journey date, and explain the adjustment instead of incorrectly presenting the route as outside the prototype network.
+- Removed the unused legacy `AppShell`, `Discovery`, and `BookingFlow` components so the maintained frontend has one coherent design system.
+
 - Replaced the process-local transport and booking runtime with SQLAlchemy persistence, using local SQLite by default and a Neon-compatible PostgreSQL URL in production.
 - Added an idempotent 15-hub Maharashtra seed with 18 bidirectional corridors, multiple service classes and departures, a rolling 14-day timetable, and non-destructive trip creation.
 - Added separate confirmed-seat and temporary-hold records, transactional hold acquisition, persisted passengers/tickets/refunds, and restart-safe booking management.

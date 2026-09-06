@@ -24,12 +24,13 @@ Within about one minute, a passenger can search for a journey, understand availa
 
 ## MVP boundary
 
-The MVP supports a deterministic 15-hub Maharashtra prototype network, direct journeys and journeys with one transfer, seat selection, a mock payment lifecycle, ticket issuance, cancellation/refund presentation, and a frontend-only demo access gate. It excludes real authentication, official or complete MSRTC network coverage, real payment/GPS integrations, and operational tooling.
+The MVP supports a scenario-led synthetic network with four clearly advertised demo journeys, direct journeys and one deterministic one-transfer route, independent seat selection per bus, a mock payment lifecycle, ticket issuance, cancellation/refund presentation, and a frontend-only demo access gate. It excludes real authentication, official or complete MSRTC network coverage, real payment/GPS integrations, and operational tooling.
 
 ## Demo scenarios
 
 1. “Pune to Nashik tomorrow morning, AC” resolves to validated intent, presents direct options, and completes booking.
-2. A deliberately unsupported direct destination returns a deterministic Pune → Satara → Demo Destination connection.
+2. “Pune to Demo Destination” returns and books the deterministic Pune → Satara → Demo Destination connection.
+3. A request outside the curated network is acknowledged and redirected to the available demo journeys without being presented as a system failure.
 
 ## Measures of success
 

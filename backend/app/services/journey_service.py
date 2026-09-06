@@ -72,7 +72,7 @@ class JourneyService:
             return JourneySearchResponse(
                 sort_by=request.sort_by,
                 results=[],
-                connecting_results=self._rank_connections(connecting_results, request.sort_by),
+                connecting_results=self._rank_connections(connecting_results, request.sort_by)[:3],
             )
         raise JourneyDomainError(
             "NO_JOURNEY_FOUND",

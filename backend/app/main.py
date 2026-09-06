@@ -12,9 +12,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from app.integrations.openai.intent_provider import IntentProviderError, configured_intent_provider
+from app.integrations.openai.transcription_provider import TranscriptionProviderError, configured_transcription_provider
 from app.schemas.intent import IntentParseRequest
 from app.schemas.journeys import JourneySearchRequest
 from app.schemas.bookings import CreateBookingRequest, PassengerRequest, PaymentRequest, SelectSeatsRequest
+from app.schemas.aftercare import ComplaintRequest, ManualComplaintRequest
 from app.integrations.payments.mock_provider import MockPaymentProvider
 from app.persistence.database import Base, SessionLocal, engine
 from app.persistence.seed import active_date_window, seed_database
@@ -22,6 +24,7 @@ from app.repositories.sql import SqlBookingRepository, SqlTicketRepository, SqlT
 from app.services.booking_service import BookingService
 from app.services.ticket_service import TicketService
 from app.services.intent_service import IntentService
+from app.services.aftercare_service import AftercareService
 from app.services.journey_service import JourneyDomainError, JourneyService
 from app.core.events import emit_domain_event
 
@@ -64,6 +67,14 @@ async def intent_provider_error_handler(_: Request, error: IntentProviderError) 
     )
 
 
+@app.exception_handler(TranscriptionProviderError)
+async def transcription_provider_error_handler(_: Request, error: TranscriptionProviderError) -> JSONResponse:
+    return JSONResponse(
+        status_code=503,
+        content={"error": {"code": "VOICE_UNAVAILABLE", "message": str(error), "details": {}}},
+    )
+
+
 def journey_service() -> JourneyService:
     return JourneyService(transport_provider, booking_repository)
 
@@ -74,6 +85,9 @@ def booking_service() -> BookingService:
 
 def ticket_service() -> TicketService:
     return TicketService(transport_provider, ticket_repository)
+
+
+aftercare = AftercareService(booking_service(), ticket_service(), transport_provider)
 
 
 def intent_service() -> IntentService:
@@ -125,9 +139,26 @@ def parse_intent(request: IntentParseRequest) -> object:
     return intent
 
 
+@app.post("/api/voice/transcribe")
+async def transcribe_voice(request: Request) -> dict[str, str]:
+    """Transcribe one explicitly-started recording; audio is never persisted."""
+    audio = await request.body()
+    if not audio:
+        raise TranscriptionProviderError("We did not receive a voice recording. Please try again or type your journey.")
+    if len(audio) > 5_000_000:
+        raise TranscriptionProviderError("That recording is too large. Please make a shorter journey request.")
+    content_type = request.headers.get("content-type", "audio/webm").split(";", 1)[0]
+    requested_locale = request.headers.get("x-voice-locale", "en").lower()
+    language_hint = "mr" if requested_locale.startswith("mr") else "en"
+    return {"transcript": configured_transcription_provider().transcribe(audio, content_type, language_hint)}
+
+
 @app.post("/api/bookings")
 def create_booking(request: CreateBookingRequest) -> object:
-    booking = booking_service().create(request.trip_id)
+    trip_ids = tuple(request.trip_ids or ([request.trip_id] if request.trip_id else []))
+    if not trip_ids:
+        raise JourneyDomainError("INVALID_BOOKING_REQUEST", "Choose at least one service to begin booking.", {}, 422)
+    booking = booking_service().create(trip_ids[0], trip_ids)
     emit_domain_event("booking.created", booking_id=booking.id, trip_id=booking.trip_id)
     return booking
 
@@ -139,8 +170,8 @@ def get_booking(booking_id: str) -> object:
 
 @app.post("/api/bookings/{booking_id}/seats")
 def select_booking_seats(booking_id: str, request: SelectSeatsRequest) -> object:
-    booking = booking_service().select_seats(booking_id, request.seat_numbers)
-    emit_domain_event("booking.seats_held", booking_id=booking.id, seat_count=len(request.seat_numbers))
+    booking = booking_service().select_seats(booking_id, request.seat_numbers, request.seat_selections)
+    emit_domain_event("booking.seats_held", booking_id=booking.id, seat_count=len(request.seat_selections or request.seat_numbers or []))
     return booking
 
 
@@ -191,8 +222,33 @@ def advance_booking_refund(booking_id: str) -> object:
     return booking
 
 
+@app.get("/api/bookings/{booking_id}/tracking")
+def get_booking_tracking(booking_id: str, demo_state: str | None = None) -> object:
+    """Synthetic customer tracking; no GPS or MSRTC vehicle feed is connected."""
+    return aftercare.tracking(booking_id, demo_state)
+
+
+@app.post("/api/bookings/{booking_id}/complaints")
+def submit_booking_complaint(booking_id: str, request: ComplaintRequest) -> object:
+    complaint = aftercare.submit_complaint(booking_id, request)
+    emit_domain_event("complaint.submitted_mock", booking_id=booking_id, category=request.category)
+    return complaint
+
+
+@app.post("/api/complaints")
+def submit_manual_complaint(request: ManualComplaintRequest) -> object:
+    complaint = aftercare.submit_manual_complaint(request)
+    emit_domain_event("complaint.submitted_mock", booking_id=None, category=request.category)
+    return complaint
+
+
+@app.get("/api/complaints/{reference}")
+def get_complaint(reference: str) -> object:
+    return aftercare.get_complaint(reference)
+
+
 # The production container builds the frontend into this location, allowing one
 # HTTPS origin for the app and API. Local development continues to use Vite.
-frontend_dist = Path(__file__).resolve().parents[2] / "frontend_dist"
+frontend_dist = Path(__file__).resolve().parents[1] / "frontend_dist"
 if frontend_dist.is_dir():
     app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")

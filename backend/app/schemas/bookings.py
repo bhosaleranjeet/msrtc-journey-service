@@ -7,11 +7,20 @@ from app.domain.transport.models import SeatStatus, SeatType
 
 
 class CreateBookingRequest(BaseModel):
+    trip_id: str | None = Field(default=None, min_length=1)
+    trip_ids: list[str] | None = Field(default=None, min_length=1, max_length=2)
+
+
+class TripSeatSelection(BaseModel):
     trip_id: str = Field(min_length=1)
+    seat_number: str = Field(min_length=1, max_length=8)
 
 
 class SelectSeatsRequest(BaseModel):
-    seat_numbers: list[str] = Field(min_length=1, max_length=6)
+    # `seat_numbers` remains for a direct journey and backwards-compatible
+    # callers. Connected journeys should send one explicit seat per leg.
+    seat_numbers: list[str] | None = Field(default=None, min_length=1, max_length=6)
+    seat_selections: list[TripSeatSelection] | None = Field(default=None, min_length=1, max_length=2)
 
 
 class PassengerRequest(BaseModel):
@@ -35,13 +44,20 @@ class BookingSeat(BaseModel):
     held_by_current_booking: bool = False
 
 
+class BookingSeatGroup(BaseModel):
+    trip_id: str
+    seats: list[BookingSeat]
+
+
 class BookingResponse(BaseModel):
     id: str
     trip_id: str
+    trip_ids: list[str] = []
     status: BookingStatus
     created_at: datetime
     expires_at: datetime | None
     seats: list[BookingSeat]
+    seat_groups: list[BookingSeatGroup] = Field(default_factory=list)
     passenger: Passenger | None
     base_fare_inr: int
     concession_discount_inr: int

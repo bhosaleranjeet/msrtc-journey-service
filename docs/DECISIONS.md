@@ -85,3 +85,45 @@ The prototype uses SQLAlchemy repositories with SQLite as the zero-configuration
 - Date: 2026-08-28
 
 Natural-language AI output is limited to origin, destination, date, time, and preferences validated against typed schemas. Routes, departures, fares, availability, connections, bookings, and refunds must come from deterministic repository data. This avoids presenting plausible model output as a real bus service and keeps the prototype reproducible even though no suitable official open MSRTC API is available.
+
+## ADR-013 — Extend bookings compatibly for one connected itinerary
+
+- Status: accepted
+- Date: 2026-09-05
+
+Round 2 retains the existing single-trip booking aggregate and adds an ordered `booking_trips` relation for at most two deterministic trips. The first trip remains the legacy `trip_id`, preserving current clients and cancellation behavior, while the ordered itinerary supports connected fares, inventory checks, and Journey Pass presentation. Assignment, tracking, and complaints remain explicitly synthetic customer-facing demonstrations; no operational MSRTC integration is implied.
+
+## ADR-014 — Use a scenario-led synthetic network
+
+- Status: accepted
+- Date: 2026-09-05
+
+The prototype exposes six deliberate synthetic corridors rather than broad illustrative statewide coverage: Mumbai–Pune, three Pune–Nashik stop variants, Pune–Satara, and Satara–Demo Destination. The homepage advertises only four testable examples. This makes supported behavior clear, ensures every proposed Nashik stop is a valid destination, and retains one deterministic connection demonstration without implying a reliable statewide timetable.
+
+## ADR-015 — Use server-side language detection for voice input
+
+- Status: accepted
+- Date: 2026-09-05
+
+Browser speech recognition is retained only as a local end-of-speech signal because its language support, especially for Marathi in Safari, is inconsistent and tied to one locale. A short recording made only after the passenger presses the microphone is sent to the configured OpenAI transcription service without a language hint, allowing Marathi, English, and common code-switching to be identified. Audio is not stored; the resulting transcript continues through the existing deterministic intent and journey pipeline. If microphone access or transcription is unavailable, typed search remains available.
+
+## ADR-016 — Localize presentation while preserving canonical transport identity
+
+- Status: accepted
+- Date: 2026-09-05
+
+English and Marathi presentation use one keyed catalog, including dynamic statuses, errors, stop descriptions, booking stages, tracking and complaint copy. Stop and route identifiers remain canonical at the API boundary and are localized only for display. This prevents translated labels from becoming accidental transport keys and ensures voice, typed, and manual searches all enter the same deterministic stop-resolution pipeline.
+
+## ADR-017 — Keep synthetic aftercare isolated and transient
+
+- Status: accepted
+- Date: 2026-09-05
+
+Tracking states, map positions, notification copy and complaint acknowledgements are customer-facing simulations behind a dedicated aftercare service. They are intentionally process-local because the prototype has no real user account, vehicle assignment, GPS, notification, evidence-storage or MSRTC complaint integration. Optional complaint images are previewed locally; the API validates and acknowledges only their filename, MIME type, and size, never the image bytes. Confirmed bookings and tickets remain durable SQL records, every aftercare screen declares its synthetic status, and the adapter can be replaced without changing booking truth.
+
+## ADR-018 — Remember a small recent-booking index in the browser
+
+- Status: accepted
+- Date: 2026-09-05
+
+ADR-010's single reference is superseded by a browser-local index of at most five confirmed booking IDs and display summaries. Selecting one always reloads authoritative booking and ticket state from the backend; the browser does not store payment, cancellation, or complaint truth. This gives reviewers a useful “My bookings” experience without implying that the frontend-only access gate is a real customer account.

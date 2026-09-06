@@ -7,8 +7,8 @@ from app.domain.transport.models import SeatStatus
 from app.integrations.payments.mock_provider import PaymentProvider
 from app.repositories.bookings import BookingRepository
 from app.repositories.transport import TransportRepository
-from app.schemas.bookings import BookingResponse, BookingSeat, CancellationPreview, PassengerRequest
-from app.services.journey_service import JourneyDomainError
+from app.schemas.bookings import BookingResponse, BookingSeat, BookingSeatGroup, CancellationPreview, PassengerRequest, TripSeatSelection
+from app.services.journey_service import MAX_TRANSFER_MINUTES, MIN_TRANSFER_MINUTES, JourneyDomainError
 
 HOLD_DURATION = timedelta(minutes=10)
 
@@ -20,11 +20,44 @@ class BookingService:
         self._payments = payments
         self._clock = clock or (lambda: datetime.now(UTC))
 
-    def create(self, trip_id: str) -> BookingResponse:
+    def create(self, trip_id: str, trip_ids: tuple[str, ...] = ()) -> BookingResponse:
         self._expire_holds()
-        if not any(trip.id == trip_id for trip in self._transport.list_trips()):
+        itinerary = trip_ids or (trip_id,)
+        trips = {trip.id: trip for trip in self._transport.list_trips()}
+        if len(itinerary) > 2 or len(set(itinerary)) != len(itinerary) or not all(item in trips for item in itinerary):
             raise JourneyDomainError("TRIP_NOT_FOUND", "This service is no longer available.", {"trip_id": trip_id}, 404)
-        booking = Booking(id=f"booking_{uuid4().hex[:12]}", trip_id=trip_id, created_at=self._clock())
+        if len(itinerary) == 2:
+            services = {service.id: service for service in self._transport.list_services()}
+            routes = {route.id: route for route in self._transport.list_routes()}
+            first, second = (trips[item] for item in itinerary)
+            first_route = routes[services[first.service_id].route_id]
+            second_route = routes[services[second.service_id].route_id]
+            transfer_minutes = int((second.departure_at - first.arrival_at).total_seconds() / 60)
+            if (
+                first.journey_date != second.journey_date
+                or first_route.destination_stop_id != second_route.origin_stop_id
+                or not MIN_TRANSFER_MINUTES <= transfer_minutes <= MAX_TRANSFER_MINUTES
+            ):
+                raise JourneyDomainError(
+                    "INVALID_CONNECTION",
+                    "Those services do not form a valid one-transfer journey.",
+                    {"trip_ids": list(itinerary)},
+                    422,
+                )
+        for current_trip_id in itinerary:
+            if not any(
+                seat.status == SeatStatus.AVAILABLE
+                and not self._bookings.is_booked(seat.id)
+                and not self._bookings.holder_for(seat.id)
+                for seat in self._transport.list_seats(current_trip_id)
+            ):
+                raise JourneyDomainError(
+                    "TRIP_UNAVAILABLE",
+                    "One of these services no longer has an available seat.",
+                    {"trip_id": current_trip_id},
+                    409,
+                )
+        booking = Booking(id=f"booking_{uuid4().hex[:12]}", trip_id=itinerary[0], trip_ids=itinerary, created_at=self._clock())
         self._bookings.create(booking)
         return self._response(booking)
 
@@ -36,21 +69,23 @@ class BookingService:
         self._expire_holds()
         return self._booking_or_error(booking_id)
 
-    def select_seats(self, booking_id: str, seat_numbers: list[str]) -> BookingResponse:
+    def select_seats(self, booking_id: str, seat_numbers: list[str] | None = None, seat_selections: list[TripSeatSelection] | None = None) -> BookingResponse:
         self._expire_holds()
         booking = self._booking_or_error(booking_id)
-        if len(set(seat_numbers)) != len(seat_numbers):
-            raise JourneyDomainError("INVALID_SEAT_SELECTION", "Choose each seat only once.", {}, 422)
-        trip_seats = {seat.number: seat for seat in self._transport.list_seats(booking.trip_id)}
-        selected = []
-        for number in seat_numbers:
-            seat = trip_seats.get(number)
-            if not seat or seat.status != SeatStatus.AVAILABLE:
-                raise JourneyDomainError("SEAT_UNAVAILABLE", "One of those seats is no longer available.", {"seat_number": number}, 409)
-            holder = self._bookings.holder_for(seat.id)
-            if self._bookings.is_booked(seat.id) or (holder and holder != booking.id):
-                raise JourneyDomainError("SEAT_UNAVAILABLE", "One of those seats is currently being selected by another passenger.", {"seat_number": number}, 409)
-            selected.append(seat)
+        if seat_selections:
+            if seat_numbers is not None or len(seat_selections) != len(booking.trip_ids) or {item.trip_id for item in seat_selections} != set(booking.trip_ids):
+                raise JourneyDomainError("INVALID_SEAT_SELECTION", "Choose one seat for each bus in this connected journey.", {}, 422)
+            selected = [self._available_seat(booking, item.trip_id, item.seat_number) for item in seat_selections]
+        else:
+            if len(booking.trip_ids) > 1:
+                raise JourneyDomainError("INVALID_SEAT_SELECTION", "Choose one seat for each bus in this connected journey.", {}, 422)
+            if not seat_numbers or len(set(seat_numbers)) != len(seat_numbers):
+                raise JourneyDomainError("INVALID_SEAT_SELECTION", "Choose each seat only once.", {}, 422)
+            selected = [
+                self._available_seat(booking, trip_id, number)
+                for trip_id in (booking.trip_id,)
+                for number in seat_numbers
+            ]
         expires_at = self._clock() + HOLD_DURATION
         booking.hold_seats(tuple(seat.id for seat in selected), expires_at)
         if not self._bookings.try_hold_seats(booking, booking.selected_seat_ids, expires_at):
@@ -62,11 +97,20 @@ class BookingService:
             )
         return self._response(booking)
 
+    def _available_seat(self, booking: Booking, trip_id: str, number: str):
+        seat = next((item for item in self._transport.list_seats(trip_id) if item.number == number), None)
+        if not seat or seat.status != SeatStatus.AVAILABLE:
+            raise JourneyDomainError("SEAT_UNAVAILABLE", "That seat is no longer available.", {"trip_id": trip_id, "seat_number": number}, 409)
+        holder = self._bookings.holder_for(seat.id)
+        if self._bookings.is_booked(seat.id) or (holder and holder != booking.id):
+            raise JourneyDomainError("SEAT_UNAVAILABLE", "That seat is currently being selected by another passenger.", {"trip_id": trip_id, "seat_number": number}, 409)
+        return seat
+
     def add_passenger(self, booking_id: str, request: PassengerRequest) -> BookingResponse:
         self._expire_holds()
         booking = self._booking_or_error(booking_id)
-        service = next(service for service in self._transport.list_services() if service.id == self._trip_service_id(booking.trip_id))
-        base_fare = service.fare_inr * len(booking.selected_seat_ids)
+        service_fares = [next(service.fare_inr for service in self._transport.list_services() if service.id == self._trip_service_id(trip_id)) for trip_id in (booking.trip_ids or (booking.trip_id,))]
+        base_fare = sum(service_fares) * (len(booking.selected_seat_ids) // len(service_fares))
         discount = self._mock_concession_discount(request.age, request.concession_type.value, base_fare)
         try:
             booking.add_passenger(request.to_domain(), base_fare, discount)
@@ -141,19 +185,24 @@ class BookingService:
         return self._response(booking)
 
     def _response(self, booking: Booking) -> BookingResponse:
-        seats: list[BookingSeat] = []
-        for seat in self._transport.list_seats(booking.trip_id):
-            holder = self._bookings.holder_for(seat.id)
-            is_current = holder == booking.id
-            if self._bookings.is_booked(seat.id):
-                status = SeatStatus.BOOKED
-                is_current = False
-            else:
-                status = SeatStatus.HELD if holder else seat.status
-            seats.append(BookingSeat(id=seat.id, number=seat.number, status=status, seat_type=seat.seat_type, held_by_current_booking=is_current))
+        def seats_for(trip_id: str) -> list[BookingSeat]:
+            seats: list[BookingSeat] = []
+            for seat in self._transport.list_seats(trip_id):
+                holder = self._bookings.holder_for(seat.id)
+                is_current = holder == booking.id
+                if self._bookings.is_booked(seat.id):
+                    status = SeatStatus.BOOKED
+                    is_current = False
+                else:
+                    status = SeatStatus.HELD if holder else seat.status
+                seats.append(BookingSeat(id=seat.id, number=seat.number, status=status, seat_type=seat.seat_type, held_by_current_booking=is_current))
+            return seats
+
+        seat_groups = [BookingSeatGroup(trip_id=trip_id, seats=seats_for(trip_id)) for trip_id in (booking.trip_ids or (booking.trip_id,))]
+        seats = seat_groups[0].seats
         return BookingResponse(
-            id=booking.id, trip_id=booking.trip_id, status=booking.status, created_at=booking.created_at, expires_at=booking.expires_at,
-            seats=seats, passenger=booking.passenger, base_fare_inr=booking.base_fare_inr,
+            id=booking.id, trip_id=booking.trip_id, trip_ids=list(booking.trip_ids or (booking.trip_id,)), status=booking.status, created_at=booking.created_at, expires_at=booking.expires_at,
+            seats=seats, seat_groups=seat_groups, passenger=booking.passenger, base_fare_inr=booking.base_fare_inr,
             concession_discount_inr=booking.concession_discount_inr, total_fare_inr=booking.total_fare_inr,
             payment_status=booking.payment_status, payment_reference=booking.payment_reference, refund_status=booking.refund_status,
         )

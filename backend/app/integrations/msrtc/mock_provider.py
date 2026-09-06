@@ -43,12 +43,12 @@ class MockTransportProvider(InMemoryTransportRepository):
 
     def __init__(self) -> None:
         stops = (
-            Stop(id="stop_pune_station", code="PNQSTN", name="Pune Station", city="Pune", aliases=("Pune", "Pune bus stand"), latitude=18.528, longitude=73.874, description="Main boarding area near Pune railway station."),
-            Stop(id="stop_nashik_mahamarg", code="NSKMRG", name="Nashik Mahamarg", city="Nashik", aliases=("Nashik", "Nasik", "Nashik Highway"), latitude=19.997, longitude=73.790, description="Mahamarg bus stop on the Mumbai-Agra highway."),
-            Stop(id="stop_nashik_cbs", code="NSKCBS", name="Nashik CBS", city="Nashik", aliases=("Nashik", "Nashik Central"), latitude=19.992, longitude=73.787, description="Central Bus Stand in Nashik city."),
-            Stop(id="stop_nashik_road", code="NSKRD", name="Nashik Road", city="Nashik", aliases=("Nashik", "Nashik railway station"), latitude=19.966, longitude=73.822, description="Boarding point near Nashik Road railway station."),
-            Stop(id="stop_satara_stand", code="STRSTN", name="Satara Bus Stand", city="Satara", aliases=("Satara",), latitude=17.680, longitude=73.993, description="Central Satara intercity bus stand."),
-            Stop(id="stop_demo_destination", code="DMODST", name="Demo Destination", city="Demo District", aliases=("Demo Destination",), latitude=17.940, longitude=74.350, description="Synthetic destination used to demonstrate a connection."),
+            Stop(id="stop_pune_station", code="PNQSTN", name="Pune Station", city="Pune", aliases=("Pune", "Pune bus stand", "पुणे", "पुण्याहून", "पुने", "पूणे"), latitude=18.528, longitude=73.874, description="Main boarding area near Pune railway station."),
+            Stop(id="stop_nashik_mahamarg", code="NSKMRG", name="Nashik Mahamarg", city="Nashik", aliases=("Nashik", "Nasik", "Nashik Highway", "नाशिक", "नाशीक", "नासिक", "नाशिक महामार्ग"), latitude=19.997, longitude=73.790, description="Mahamarg bus stop on the Mumbai-Agra highway."),
+            Stop(id="stop_nashik_cbs", code="NSKCBS", name="Nashik CBS", city="Nashik", aliases=("Nashik", "Nashik Central", "नाशिक", "नाशीक", "नासिक", "नाशिक सीबीएस"), latitude=19.992, longitude=73.787, description="Central Bus Stand in Nashik city."),
+            Stop(id="stop_nashik_road", code="NSKRD", name="Nashik Road", city="Nashik", aliases=("Nashik", "Nashik railway station", "नाशिक", "नाशीक", "नासिक", "नाशिक रोड"), latitude=19.966, longitude=73.822, description="Boarding point near Nashik Road railway station."),
+            Stop(id="stop_satara_stand", code="STRSTN", name="Satara Bus Stand", city="Satara", aliases=("Satara", "सातारा"), latitude=17.680, longitude=73.993, description="Central Satara intercity bus stand."),
+            Stop(id="stop_demo_destination", code="DMODST", name="Demo Destination", city="Demo District", aliases=("Demo Destination", "नमुना गंतव्य"), latitude=17.940, longitude=74.350, description="Synthetic destination used to demonstrate a connection."),
         )
         routes = (
             Route(id="route_pune_nashik_mahamarg", origin_stop_id="stop_pune_station", destination_stop_id="stop_nashik_mahamarg"),

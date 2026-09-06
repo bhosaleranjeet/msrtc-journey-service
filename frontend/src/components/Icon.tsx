@@ -1,4 +1,4 @@
-type IconName = 'arrow' | 'bus' | 'calendar' | 'clock' | 'location' | 'seat' | 'sparkle' | 'ticket' | 'check' | 'chevron'
+type IconName = 'arrow' | 'bus' | 'calendar' | 'clock' | 'location' | 'seat' | 'sparkle' | 'ticket' | 'check' | 'chevron' | 'microphone'
 
 export function Icon({ name, label }: { name: IconName; label?: string }) {
   const common = { width: 20, height: 20, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, 'aria-hidden': label ? undefined : true }
@@ -13,6 +13,7 @@ export function Icon({ name, label }: { name: IconName; label?: string }) {
     ticket: <><path d="M4 5h16v5a2 2 0 0 0 0 4v5H4v-5a2 2 0 0 0 0-4V5Z" /><path d="M13 7v10" /></>,
     check: <><circle cx="12" cy="12" r="9" /><path d="m8 12 2.5 2.5L16 9" /></>,
     chevron: <path d="m9 18 6-6-6-6" />,
+    microphone: <><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M6 11a6 6 0 0 0 12 0M12 17v4M8 21h8" /></>,
   }
   return <svg {...common} role={label ? 'img' : undefined}><title>{label}</title>{paths[name]}</svg>
 }

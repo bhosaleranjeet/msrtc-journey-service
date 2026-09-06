@@ -7,6 +7,7 @@ from app.integrations.payments.mock_provider import MockPaymentProvider
 from app.repositories.bookings import InMemoryBookingRepository
 from app.services.booking_service import BookingService
 from app.services.journey_service import JourneyDomainError
+from app.schemas.bookings import PassengerRequest, TripSeatSelection
 
 
 class Clock:
@@ -58,8 +59,6 @@ def test_unknown_or_booked_seats_return_machine_readable_errors() -> None:
 def _booking_ready_for_payment(service: BookingService):
     booking = service.create("trip_pune_nashik_ac")
     service.select_seats(booking.id, ["2"])
-    from app.schemas.bookings import PassengerRequest
-
     return service.add_passenger(booking.id, PassengerRequest(name="Asha Patil", age=65, concession_type="SENIOR"))
 
 
@@ -110,3 +109,55 @@ def test_invalid_payment_transition_is_rejected() -> None:
     with pytest.raises(JourneyDomainError) as error:
         service.begin_payment(booking.id, confirmation_should_fail=False)
     assert error.value.code == "INVALID_BOOKING_STATE"
+
+
+def test_connected_booking_holds_matching_inventory_and_combines_fares() -> None:
+    service = _service(Clock())
+    booking = service.create("trip_pune_satara", ("trip_pune_satara", "trip_satara_demo"))
+    held = service.select_seats(
+        booking.id,
+        seat_selections=[
+            TripSeatSelection(trip_id="trip_pune_satara", seat_number="2"),
+            TripSeatSelection(trip_id="trip_satara_demo", seat_number="4"),
+        ],
+    )
+    priced = service.add_passenger(booking.id, PassengerRequest(name="Asha Patil", age=32, concession_type="NONE"))
+
+    assert held.trip_ids == ["trip_pune_satara", "trip_satara_demo"]
+    assert priced.base_fare_inr == 390
+
+
+def test_connected_booking_accepts_a_different_seat_for_each_bus() -> None:
+    service = _service(Clock())
+    booking = service.create("trip_pune_satara", ("trip_pune_satara", "trip_satara_demo"))
+
+    held = service.select_seats(
+        booking.id,
+        seat_selections=[
+            TripSeatSelection(trip_id="trip_pune_satara", seat_number="2"),
+            TripSeatSelection(trip_id="trip_satara_demo", seat_number="3"),
+        ],
+    )
+
+    assert held.status == "SEATS_HELD"
+    assert [group.seats[1].held_by_current_booking for group in held.seat_groups] == [True, False]
+    assert held.seat_groups[1].seats[2].held_by_current_booking
+
+
+def test_connected_booking_rejects_one_legacy_seat_for_both_buses() -> None:
+    service = _service(Clock())
+    booking = service.create("trip_pune_satara", ("trip_pune_satara", "trip_satara_demo"))
+
+    with pytest.raises(JourneyDomainError) as error:
+        service.select_seats(booking.id, ["2"])
+
+    assert error.value.code == "INVALID_SEAT_SELECTION"
+
+
+def test_booking_rejects_known_trips_that_do_not_form_a_connection() -> None:
+    service = _service(Clock())
+
+    with pytest.raises(JourneyDomainError) as error:
+        service.create("trip_pune_nashik_ac", ("trip_pune_nashik_ac", "trip_satara_demo"))
+
+    assert error.value.code == "INVALID_CONNECTION"

@@ -11,7 +11,7 @@ from app.persistence.models import BookingRow, StopRow, TripRow
 from app.persistence.seed import active_date_window, seed_database
 from app.repositories.sql import SqlBookingRepository, SqlTransportRepository
 from app.repositories.sql import SqlTicketRepository
-from app.schemas.bookings import PassengerRequest
+from app.schemas.bookings import PassengerRequest, TripSeatSelection
 from app.schemas.journeys import JourneySearchRequest, JourneySort
 from app.services.booking_service import BookingService
 from app.services.journey_service import JourneyDomainError, JourneyService
@@ -27,16 +27,16 @@ def database(tmp_path):
     return sessions
 
 
-def test_seed_is_idempotent_and_covers_fifteen_major_hubs(database) -> None:
+def test_seed_is_idempotent_and_covers_the_curated_demo_network(database) -> None:
     with database() as session:
         first_trip_count = session.scalar(select(func.count()).select_from(TripRow))
-        assert session.scalar(select(func.count()).select_from(StopRow).where(StopRow.is_major_hub.is_(True))) == 15
+        assert session.scalar(select(func.count()).select_from(StopRow).where(StopRow.is_major_hub.is_(True))) == 4
 
     seed_database(database)
 
     with database() as session:
         assert session.scalar(select(func.count()).select_from(TripRow)) == first_trip_count
-        assert first_trip_count == 1_064
+        assert first_trip_count == 336
 
 
 def test_bidirectional_search_and_date_window_error(database) -> None:
@@ -86,7 +86,7 @@ def test_database_network_filters_sorts_resolves_and_connects(database) -> None:
     assert len(connection.connecting_results[0].segments) == 2
 
     with pytest.raises(JourneyDomainError) as unsupported:
-        journeys.search_direct(JourneySearchRequest(origin="Ratnagiri", destination="Nagpur", journey_date=start_date))
+        journeys.search_direct(JourneySearchRequest(origin="Mumbai", destination="Demo Destination", journey_date=start_date))
     assert unsupported.value.code == "NO_JOURNEY_FOUND"
 
 
@@ -168,7 +168,7 @@ def test_expired_hold_and_terminal_confirmation_failure_release_inventory(databa
     repository = SqlBookingRepository(database)
     start_date, _ = transport.supported_date_range()
     journey = JourneyService(transport, repository).search_direct(
-        JourneySearchRequest(origin="Pune", destination="Solapur", journey_date=start_date)
+        JourneySearchRequest(origin="Pune", destination="Nashik Mahamarg", journey_date=start_date)
     ).results[0]
 
     expired = Booking(id="booking_expired_sql", trip_id=journey.trip_id, created_at=datetime.now(UTC))
@@ -191,3 +191,32 @@ def test_expired_hold_and_terminal_confirmation_failure_release_inventory(databa
     assert failed.refund_status == "PENDING"
     assert repository.holder_for(seat_id) is None
     assert not repository.is_booked(seat_id)
+
+
+def test_connected_booking_and_both_ticket_legs_survive_repository_recreation(database) -> None:
+    transport = SqlTransportRepository(database)
+    repository = SqlBookingRepository(database)
+    booking_service = BookingService(transport, repository, MockPaymentProvider())
+    start_date, _ = transport.supported_date_range()
+    connection = JourneyService(transport, repository).search_direct(
+        JourneySearchRequest(origin="Pune", destination="Demo Destination", journey_date=start_date)
+    ).connecting_results[0]
+    trip_ids = tuple(segment.trip_id for segment in connection.segments)
+    booking = booking_service.create(trip_ids[0], trip_ids)
+    booking_service.select_seats(
+        booking.id,
+        seat_selections=[
+            TripSeatSelection(trip_id=trip_ids[0], seat_number="2"),
+            TripSeatSelection(trip_id=trip_ids[1], seat_number="4"),
+        ],
+    )
+    booking_service.add_passenger(booking.id, PassengerRequest(name="Connected Passenger", age=30))
+    booking_service.begin_payment(booking.id, False)
+    booking_service.confirm(booking.id)
+
+    reopened = BookingService(transport, SqlBookingRepository(database), MockPaymentProvider()).aggregate(booking.id)
+    journey_pass = TicketService(transport, SqlTicketRepository(database)).issue(reopened)
+
+    assert reopened.trip_ids == trip_ids
+    assert [leg.seat_numbers for leg in journey_pass.legs] == [["2"], ["4"]]
+    assert journey_pass.destination == "Demo Destination"

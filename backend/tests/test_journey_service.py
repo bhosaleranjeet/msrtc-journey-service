@@ -64,6 +64,24 @@ def test_demo_destination_returns_a_single_valid_connection() -> None:
     assert connection.total_duration_minutes == 315
 
 
+def test_marathi_stop_aliases_follow_the_same_deterministic_paths() -> None:
+    with pytest.raises(JourneyDomainError) as ambiguous:
+        _service().search_direct(JourneySearchRequest(origin="पुणे", destination="नाशिक", journey_date=DEMO_DATE))
+    assert ambiguous.value.code == "AMBIGUOUS_STOP"
+
+    connection = _service().search_direct(
+        JourneySearchRequest(origin="पुणे", destination="नमुना गंतव्य", journey_date=DEMO_DATE)
+    )
+    assert [segment.trip_id for segment in connection.connecting_results[0].segments] == [
+        "trip_pune_satara",
+        "trip_satara_demo",
+    ]
+
+    with pytest.raises(JourneyDomainError) as phonetic_ambiguous:
+        _service().search_direct(JourneySearchRequest(origin="पुने", destination="नाशीक", journey_date=DEMO_DATE))
+    assert phonetic_ambiguous.value.code == "AMBIGUOUS_STOP"
+
+
 def _provider_with_transfer_wait(wait_minutes: int) -> InMemoryTransportRepository:
     provider = MockTransportProvider()
     trips = list(provider.list_trips())
@@ -84,6 +102,25 @@ def _provider_with_transfer_wait(wait_minutes: int) -> InMemoryTransportReposito
 def test_unreasonable_transfer_windows_are_rejected(wait_minutes: int) -> None:
     with pytest.raises(JourneyDomainError) as error:
         JourneyService(_provider_with_transfer_wait(wait_minutes)).search_direct(
+            JourneySearchRequest(origin="Pune", destination="Demo Destination", journey_date=DEMO_DATE)
+        )
+
+    assert error.value.code == "NO_JOURNEY_FOUND"
+
+
+def test_connection_is_not_offered_when_the_second_bus_is_sold_out() -> None:
+    provider = MockTransportProvider()
+    seats = [
+        seat.model_copy(update={"status": "BOOKED"}) if seat.trip_id == "trip_satara_demo" else seat
+        for trip in provider.list_trips()
+        for seat in provider.list_seats(trip.id)
+    ]
+    sold_out = InMemoryTransportRepository(
+        stops=provider.list_stops(), routes=provider.list_routes(), services=provider.list_services(), trips=provider.list_trips(), seats=seats
+    )
+
+    with pytest.raises(JourneyDomainError) as error:
+        JourneyService(sold_out).search_direct(
             JourneySearchRequest(origin="Pune", destination="Demo Destination", journey_date=DEMO_DATE)
         )
 

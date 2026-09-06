@@ -9,7 +9,7 @@ Hackathon prototype for intent-first MSRTC journey discovery and booking. Transp
 
 ## Run locally
 
-Create local configuration from `.env.example`. Add an OpenAI key to enable natural-language intent parsing; the structured search remains available without one. Without `DATABASE_URL`, the backend uses `sqlite:///./msrtc.db` and seeds the supported network at startup.
+Create local configuration from `.env.example`. Add an OpenAI key to enable natural-language intent parsing and multilingual voice transcription; typed structured search remains available without one. Without `DATABASE_URL`, the backend uses `sqlite:///./msrtc.db` and seeds the supported network at startup.
 
 ```sh
 cp .env.example .env
@@ -35,7 +35,7 @@ The frontend runs on `http://localhost:5173`; Vite proxies `/api` calls to the b
 
 ## Demo scripts
 
-All transport, seat, payment, refund and ticket data is seeded synthetic data. The 15-hub network, schedules, availability and fares are illustrative, not an official MSRTC feed. Do not enter real passenger information or represent this prototype as connected to MSRTC or a real payment provider.
+All transport, seat, payment, refund, tracking and complaint data is synthetic. The public demo intentionally advertises only four reliable journeys across six corridors; schedules, availability and fares are illustrative, not an official MSRTC feed. Do not enter real passenger information or represent this prototype as connected to MSRTC, GPS, complaint, notification, or payment systems.
 
 ### Direct journey and booking
 
@@ -48,6 +48,13 @@ All transport, seat, payment, refund and ticket data is seeded synthetic data. T
 
 1. In the structured search, use `Pune` → `Demo Destination` and keep the prefilled demo date (tomorrow in India).
 2. Select **Find buses** to see the deterministic Pune → Satara → Demo Destination connection.
+3. Choose the connection, select one seat on each bus, complete the mock booking, and verify both legs and seats on the Journey Pass.
+
+### Marathi voice and aftercare
+
+1. Switch to **मराठी**, press the microphone, and say `मला उद्या पुण्याहून नाशिकला जायचे आहे` before pausing. Confirm the transcript continues through the same Nashik stop chooser as typed search.
+2. From a confirmed Journey Pass, open tracking and use the prototype-state selector to inspect the six explicitly synthetic states.
+3. Open **Report an issue**, choose a category and issue, optionally preview a local photo, and submit to receive a simulated ticket-linked reference.
 
 ## Deployment
 
@@ -60,7 +67,7 @@ For Render, connect this repository and create the Blueprint from `render.yaml`.
 1. Create a free Neon project in a nearby region and copy its pooled connection URL.
 2. Ensure the URL includes `sslmode=require`; keep it only in Render's secret environment-variable UI.
 3. Set Render `DATABASE_URL` to that value and redeploy. The Docker start command runs `alembic upgrade head` before the API starts.
-4. Open `/api/demo-network?summary=true` and verify `hub_count: 15`, the active coverage dates, and non-zero route/service/trip counts.
+4. Open `/api/demo-network?summary=true` and verify `hub_count: 4`, the active coverage dates, and non-zero route/service/trip counts.
 
 The seed is safe to run on every restart: it adds missing rolling dates and does not overwrite an existing trip or its booking inventory.
 

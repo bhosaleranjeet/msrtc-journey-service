@@ -98,6 +98,14 @@ class BookingSeatRow(Base):
     seat_id: Mapped[str] = mapped_column(ForeignKey("seats.id"), primary_key=True)
 
 
+class BookingTripRow(Base):
+    __tablename__ = "booking_trips"
+
+    booking_id: Mapped[str] = mapped_column(ForeignKey("bookings.id", ondelete="CASCADE"), primary_key=True)
+    trip_id: Mapped[str] = mapped_column(ForeignKey("trips.id"), primary_key=True)
+    sequence: Mapped[int] = mapped_column(Integer, default=1)
+
+
 class SeatHoldRow(Base):
     __tablename__ = "seat_holds"
 

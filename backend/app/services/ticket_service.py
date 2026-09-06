@@ -6,7 +6,7 @@ from app.domain.bookings.models import Booking, BookingStatus
 from app.domain.tickets.models import Ticket
 from app.repositories.tickets import TicketRepository
 from app.repositories.transport import TransportRepository
-from app.schemas.tickets import JourneyPass
+from app.schemas.tickets import JourneyPass, JourneyPassLeg
 from app.services.journey_service import JourneyDomainError
 
 
@@ -17,9 +17,9 @@ class TicketService:
         self._clock = clock or (lambda: datetime.now(UTC))
 
     def issue(self, booking: Booking) -> JourneyPass:
-        if booking.status != BookingStatus.CONFIRMED:
-            raise JourneyDomainError("TICKET_NOT_AVAILABLE", "A journey pass is issued only after the booking is confirmed.", {}, 409)
         ticket = self._tickets.get_by_booking(booking.id)
+        if booking.status != BookingStatus.CONFIRMED and not (booking.status == BookingStatus.CANCELLED and ticket):
+            raise JourneyDomainError("TICKET_NOT_AVAILABLE", "A journey pass is issued only after the booking is confirmed.", {}, 409)
         if not ticket:
             ticket = self._tickets.save(
                 Ticket(
@@ -27,15 +27,25 @@ class TicketService:
                     ticket_number=f"MSRTC-{uuid4().hex[:8].upper()}", qr_payload=f"mock:booking:{booking.id}", issued_at=self._clock(),
                 )
             )
-        trip = next(trip for trip in self._transport.list_trips() if trip.id == booking.trip_id)
+        trip_ids = booking.trip_ids or (booking.trip_id,)
+        trip = next(trip for trip in self._transport.list_trips() if trip.id == trip_ids[0])
         service = next(service for service in self._transport.list_services() if service.id == trip.service_id)
         route = next(route for route in self._transport.list_routes() if route.id == service.route_id)
         stops = {stop.id: stop for stop in self._transport.list_stops()}
-        seat_numbers = [seat.number for seat in self._transport.list_seats(booking.trip_id) if seat.id in booking.selected_seat_ids]
+        legs = []
+        for sequence, trip_id in enumerate(trip_ids, start=1):
+            leg_trip = next(item for item in self._transport.list_trips() if item.id == trip_id)
+            leg_service = next(item for item in self._transport.list_services() if item.id == leg_trip.service_id)
+            leg_route = next(item for item in self._transport.list_routes() if item.id == leg_service.route_id)
+            legs.append(JourneyPassLeg(sequence=sequence, departure_at=leg_trip.departure_at, arrival_at=leg_trip.arrival_at,
+                boarding_point=stops[leg_route.origin_stop_id].name, destination=stops[leg_route.destination_stop_id].name,
+                service_name=leg_service.name, seat_numbers=[seat.number for seat in self._transport.list_seats(trip_id) if seat.id in booking.selected_seat_ids]))
+        seat_numbers = legs[0].seat_numbers
+        final_leg = legs[-1]
         return JourneyPass(
             ticket_id=ticket.id, ticket_number=ticket.ticket_number, qr_payload=ticket.qr_payload, issued_at=ticket.issued_at,
-            departure_at=trip.departure_at, arrival_at=trip.arrival_at, boarding_point=stops[route.origin_stop_id].name,
-            destination=stops[route.destination_stop_id].name, service_name=service.name, seat_numbers=seat_numbers,
+            departure_at=trip.departure_at, arrival_at=final_leg.arrival_at, boarding_point=stops[route.origin_stop_id].name,
+            destination=final_leg.destination, service_name=service.name, seat_numbers=seat_numbers,
             passenger_name=booking.passenger.name if booking.passenger else "Passenger", paid_amount_inr=booking.total_fare_inr,
-            payment_reference=booking.payment_reference or "Mock payment",
+            payment_reference=booking.payment_reference or "Mock payment", legs=legs,
         )

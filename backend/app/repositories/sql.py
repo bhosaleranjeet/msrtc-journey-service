@@ -19,6 +19,7 @@ from app.domain.transport.models import Route, Seat, SeatStatus, SeatType, Servi
 from app.persistence.models import (
     BookingRow,
     BookingSeatRow,
+    BookingTripRow,
     RouteRow,
     SeatHoldRow,
     SeatRow,
@@ -27,7 +28,7 @@ from app.persistence.models import (
     TicketRow,
     TripRow,
 )
-from app.persistence.seed import HUBS, active_date_window
+from app.persistence.seed import CURATED_ROUTE_IDS, CURATED_STOP_IDS, HUBS, active_date_window
 
 
 class SqlTransportRepository:
@@ -36,7 +37,7 @@ class SqlTransportRepository:
 
     def list_stops(self) -> tuple[Stop, ...]:
         with self._sessions() as session:
-            rows = session.scalars(select(StopRow).order_by(StopRow.name)).all()
+            rows = session.scalars(select(StopRow).where(StopRow.id.in_(CURATED_STOP_IDS)).order_by(StopRow.name)).all()
             return tuple(Stop(
                 id=row.id,
                 code=row.code,
@@ -50,7 +51,7 @@ class SqlTransportRepository:
 
     def list_routes(self) -> tuple[Route, ...]:
         with self._sessions() as session:
-            rows = session.scalars(select(RouteRow)).all()
+            rows = session.scalars(select(RouteRow).where(RouteRow.id.in_(CURATED_ROUTE_IDS))).all()
             return tuple(Route(
                 id=row.id,
                 origin_stop_id=row.origin_stop_id,
@@ -60,7 +61,7 @@ class SqlTransportRepository:
 
     def list_services(self) -> tuple[Service, ...]:
         with self._sessions() as session:
-            rows = session.scalars(select(ServiceRow)).all()
+            rows = session.scalars(select(ServiceRow).where(ServiceRow.route_id.in_(CURATED_ROUTE_IDS))).all()
             return tuple(Service(
                 id=row.id,
                 name=row.name,
@@ -74,7 +75,9 @@ class SqlTransportRepository:
 
     def list_trips(self) -> tuple[TripInstance, ...]:
         with self._sessions() as session:
-            rows = session.scalars(select(TripRow)).all()
+            rows = session.scalars(
+                select(TripRow).join(ServiceRow, TripRow.service_id == ServiceRow.id).where(ServiceRow.route_id.in_(CURATED_ROUTE_IDS))
+            ).all()
             return tuple(TripInstance(
                 id=row.id,
                 service_id=row.service_id,
@@ -105,12 +108,16 @@ class SqlTransportRepository:
                 "start_date": start_date.isoformat(),
                 "end_date": end_date.isoformat(),
                 "hub_count": sum(1 for hub in HUBS if hub.major),
-                "corridor_count": 18,
+                "corridor_count": len(CURATED_ROUTE_IDS) // 2,
                 "demo_connection_count": 1,
-                "stop_count": session.scalar(select(func.count()).select_from(StopRow)) or 0,
-                "route_count": session.scalar(select(func.count()).select_from(RouteRow)) or 0,
-                "service_count": session.scalar(select(func.count()).select_from(ServiceRow)) or 0,
-                "trip_count": session.scalar(select(func.count()).select_from(TripRow).where(TripRow.service_date.between(start_date, end_date))) or 0,
+                "stop_count": session.scalar(select(func.count()).select_from(StopRow).where(StopRow.id.in_(CURATED_STOP_IDS))) or 0,
+                "route_count": session.scalar(select(func.count()).select_from(RouteRow).where(RouteRow.id.in_(CURATED_ROUTE_IDS))) or 0,
+                "service_count": session.scalar(select(func.count()).select_from(ServiceRow).where(ServiceRow.route_id.in_(CURATED_ROUTE_IDS))) or 0,
+                "trip_count": session.scalar(
+                    select(func.count()).select_from(TripRow).join(ServiceRow, TripRow.service_id == ServiceRow.id).where(
+                        ServiceRow.route_id.in_(CURATED_ROUTE_IDS), TripRow.service_date.between(start_date, end_date)
+                    )
+                ) or 0,
             }
 
 
@@ -121,6 +128,8 @@ class SqlBookingRepository:
     def create(self, booking: Booking) -> Booking:
         with self._sessions() as session, session.begin():
             session.add(self._new_row(booking))
+            for sequence, trip_id in enumerate(booking.trip_ids or (booking.trip_id,), start=1):
+                session.add(BookingTripRow(booking_id=booking.id, trip_id=trip_id, sequence=sequence))
         return booking
 
     def save(self, booking: Booking) -> Booking:
@@ -140,6 +149,9 @@ class SqlBookingRepository:
             seat_ids = tuple(session.scalars(
                 select(BookingSeatRow.seat_id).where(BookingSeatRow.booking_id == booking_id)
             ))
+            trip_ids = tuple(session.scalars(
+                select(BookingTripRow.trip_id).where(BookingTripRow.booking_id == booking_id).order_by(BookingTripRow.sequence)
+            )) or (row.trip_id,)
             passenger = None
             if row.passenger_name is not None and row.passenger_age is not None:
                 passenger = Passenger(
@@ -150,6 +162,7 @@ class SqlBookingRepository:
             return Booking(
                 id=row.id,
                 trip_id=row.trip_id,
+                trip_ids=trip_ids,
                 status=BookingStatus(row.status),
                 selected_seat_ids=seat_ids,
                 created_at=row.created_at,
